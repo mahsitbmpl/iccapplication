@@ -51,7 +51,7 @@
     // Census by report group (Stay = in-house now) with unit split
     var groups = S.boot.settings.report_groups || [];
     var census = h('div', { class: 'card' }, h('h2', null, 'Floor census (Stay = in-house now)'));
-    var t = h('table', { class: 't' }, h('tr', null, h('th', null, 'Group'), h('th', null, 'Stay'), h('th', null, 'Units'), h('th', null, 'Admitted today'), h('th', null, 'Discharged today')));
+    var t = h('table', { class: 't' }, h('tr', null, h('th', null, 'Group'), h('th', null, 'Stay'), h('th', null, 'Admitted today'), h('th', null, 'Discharged today')));
     groups.forEach(function (gr) {
       var mine = objs.filter(function (o) { return o.group === gr.name; });
       var stay = mine.filter(function (o) { return o.status === 'IN'; });
@@ -62,7 +62,7 @@
         if (unassigned) parts.push('Unassigned: ' + p2(unassigned));
         unitTxt = '(' + parts.join(' || ') + ')';
       }
-      t.appendChild(h('tr', null, h('td', null, gr.name), h('td', null, h('b', null, p2(stay.length))), h('td', { class: 'small' }, unitTxt),
+      t.appendChild(h('tr', null, h('td', null, h('b', null, gr.name), unitTxt ? h('div', { class: 'small muted' }, unitTxt) : null), h('td', null, h('b', null, p2(stay.length))),
         h('td', null, p2(mine.filter(function (o) { return o.admn_dt >= start; }).length)),
         h('td', null, p2(mine.filter(function (o) { return o.status === 'DISCHARGED' && o.dis_dt >= start; }).length))));
     });
@@ -252,8 +252,7 @@
     var events = [];
     events.push({ ts: p.admn_dt, text: 'Admitted' + (p.fields.bed.his ? ' · bed ' + p.fields.bed.his : '') });
     if (p.dis_dt) events.push({ ts: p.dis_dt, text: 'Discharged' + (p.fields.discharge_type.value ? ' · ' + p.fields.discharge_type.value : '') });
-    p.transfers.forEach(function (t) { events.push({ ts: t.ts, text: 'Bed transfer ' + t.from + ' → ' + t.to + (t.ack_by ? ' · ack ' + t.ack_by : '') }); });
-    p.trail.forEach(function (t) { events.push({ ts: t.ts, text: t.label + ': ' + (t.old || 'blank') + ' → ' + (t.new || 'blank') + ' · ' + t.by + (t.note ? ' · ' + t.note : '') }); });
+    (p.timeline || []).forEach(function (e) { events.push({ ts: e.ts, text: (e.kind === 't' ? 'Bed transfer ' : '') + e.text }); });
     events.sort(function (a, b2) { return b2.ts - a.ts; });
     var tl = h('ul', { class: 'timeline' });
     events.forEach(function (e) { tl.appendChild(h('li', null, h('div', { class: 'small muted' }, I.fmtDT(e.ts)), e.text)); });
@@ -343,19 +342,22 @@
   Views.upload = function (main) {
     if (!I.can('upload')) { main.appendChild(h('div', { class: 'msg err' }, 'You do not have the Upload HIS data permission.')); return; }
     var detected = {};      // fileType -> parsed sheet + file name
+    var busy = false;
     var results = h('div');
     var fileInput = h('input', { type: 'file', accept: '.xlsx,.xls,.csv', multiple: true, class: 'hidden', onchange: function () { readFiles(fileInput.files); fileInput.value = ''; } });
-    var drop = h('div', { class: 'drop', onclick: function () { fileInput.click(); } },
+    var drop = h('div', { class: 'drop', onclick: function () { if (!busy) fileInput.click(); } },
       h('b', null, 'Tap to choose HIS files, or drop them here'),
       h('div', { class: 'small muted' }, 'Bed Occupancy, Admission List, Discharge Report, Bed Transfer — any order, one or several at once. Each file is recognised by its column headings.'));
     ['dragover', 'dragenter'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
-    drop.addEventListener('drop', function (e) { readFiles(e.dataTransfer.files); });
-    var boxesWrap = h('div', { class: 'grid k4', style: 'margin-top:12px' });
-    var uploadAll = h('button', { class: 'btn primary', disabled: true, onclick: function () { runAll(); } }, 'Upload all detected files');
+    drop.addEventListener('drop', function (e) { if (!busy) readFiles(e.dataTransfer.files); });
+    var boxesWrap = h('div', { class: 'boxes' });
+    var uploadAll = h('button', { class: 'btn primary', disabled: true, onclick: function () { run(ORDER.filter(function (ft) { return detected[ft]; })); } }, 'Upload all detected files');
+    var clearBtn = h('button', { class: 'btn', disabled: true, onclick: function () { detected = {}; renderBoxes(); } }, 'Clear');
     var undoBox = h('div');
     main.appendChild(h('h1', null, 'Upload HIS files'));
-    main.appendChild(h('div', { class: 'card' }, drop, fileInput, boxesWrap, h('div', { class: 'row', style: 'margin-top:12px' }, uploadAll), results));
+    main.appendChild(h('div', { class: 'card' }, drop, fileInput, boxesWrap, h('div', { class: 'row', style: 'margin-top:12px' }, uploadAll, clearBtn)));
+    main.appendChild(results);
     main.appendChild(undoBox);
     main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Tablet feedback'), h('p', { class: 'small muted' }, 'The optional daily Tablet Feedback upload box arrives with the feedback module in Phase 2.')));
 
@@ -365,18 +367,21 @@
       ORDER.forEach(function (ft) {
         var st = status[ft] || {};
         var d = detected[ft];
-        boxesWrap.appendChild(h('div', { class: 'box' },
+        boxesWrap.appendChild(h('div', { class: 'box' + (d ? ' ready' : '') },
           h('h4', null, S.boot.fileTypes[ft]),
           ['Morning', 'Evening'].map(function (slot) {
-            var s = st[slot];
-            return h('div', { class: 'slot' + (s ? '' : ' missing') }, slot + ': ' + (s ? s.at.slice(11) + ' · ' + s.by + ' · ' + s.rows + ' rows' : 'not uploaded'));
+            var x = st[slot];
+            return h('div', { class: 'slot' + (x ? ' done' : ' missing') }, (x ? '✓ ' : '○ ') + slot + ': ' + (x ? x.at.slice(11) + ' · ' + x.by + ' · ' + x.rows + ' rows' : 'not uploaded'));
           }),
-          d ? h('div', { class: 'msg info small' }, d.fileName + (d.sheetName ? ' / ' + d.sheetName : '') + ': ' + d.rows.length + ' rows' +
-            (d.meta.dateTo ? ' · dated ' + I.fmtD(d.meta.dateTo) : '') +
-            (d.meta.missingFields.length ? ' · columns not found: ' + d.meta.missingFields.join(', ') : '')) : null,
-          d ? h('button', { class: 'btn small primary', onclick: function () { runOne(ft); } }, 'Upload') : null));
+          d ? h('div', { class: 'file' }, h('div', { class: 'fname', title: d.fileName }, d.fileName),
+            h('div', { class: 'small' }, d.rows.length + ' rows' + (d.meta.dateTo ? ' · dated ' + I.fmtD(d.meta.dateTo) : '')),
+            d.meta.missingFields.length ? h('div', { class: 'small warn-text' }, 'Columns not found: ' + d.meta.missingFields.join(', ')) : null) : null,
+          d ? h('button', { class: 'btn small primary', disabled: busy, onclick: function () { run([ft]); } }, 'Upload this file') : null));
       });
-      uploadAll.disabled = !Object.keys(detected).length;
+      uploadAll.disabled = busy || !Object.keys(detected).length;
+      clearBtn.disabled = busy || !Object.keys(detected).length;
+      uploadAll.textContent = busy ? 'Uploading…' : 'Upload all detected files';
+      drop.classList.toggle('disabled', busy);
     }
 
     function readFiles(files) {
@@ -386,62 +391,65 @@
         reader.onload = function () {
           try {
             var sheets = window.HisParse.parseHis(XLSX, new Uint8Array(reader.result), S.boot.settings.his_mapping, S.boot.dateFields);
-            if (!sheets.length) { results.appendChild(h('div', { class: 'msg err' }, file.name + ': not recognised as a HIS file (column headings not found). Check Settings > Column mapping.')); return; }
+            if (!sheets.length) { results.insertBefore(h('div', { class: 'msg err' }, file.name + ': not recognised as a HIS file (column headings not found). Check Settings > Column mapping.'), results.firstChild); return; }
             sheets.forEach(function (sh) { sh.fileName = file.name; detected[sh.fileType] = sh; });
             renderBoxes();
           } catch (e) {
-            results.appendChild(h('div', { class: 'msg err' }, file.name + ': ' + I.errText(e)));
+            results.insertBefore(h('div', { class: 'msg err' }, file.name + ': ' + I.errText(e)), results.firstChild);
           }
         };
         reader.readAsArrayBuffer(file);
       });
     }
 
-    function runAll() {
-      var seq = ORDER.filter(function (ft) { return detected[ft]; });
-      var p = Promise.resolve();
-      seq.forEach(function (ft) { p = p.then(function () { return runOne(ft); }); });
-      return p;
-    }
-
-    function runOne(ft, confirm) {
-      var d = detected[ft];
-      if (!d) return Promise.resolve();
-      var card = h('div', { class: 'card' }, h('div', null, h('span', { class: 'spin' }), ' Uploading ' + S.boot.fileTypes[ft] + ' (' + d.rows.length + ' rows)…'));
+    /** Upload the chosen file types in ONE call. */
+    function run(types, confirm) {
+      if (busy || !types.length) return Promise.resolve();
+      busy = true; renderBoxes();
+      var rowsTotal = types.reduce(function (n, ft) { return n + detected[ft].rows.length; }, 0);
+      var card = h('div', { class: 'card' }, h('div', null, h('span', { class: 'spin' }), ' Uploading ' + types.length + ' file(s), ' + rowsTotal + ' rows… please keep this page open.'));
       results.insertBefore(card, results.firstChild);
-      return I.Api.call('uploadHis', { fileType: ft, fileName: d.fileName, fields: d.fields, rows: d.rows, meta: d.meta, confirm: confirm || {} }).then(function (r) {
+      var files = types.map(function (ft) { var d = detected[ft]; return { fileType: ft, fileName: d.fileName, fields: d.fields, rows: d.rows, meta: d.meta }; });
+      return I.Api.call('uploadHisBatch', { files: files, confirm: confirm || {} }).then(function (r) {
         if (r.needConfirm) {
           results.removeChild(card);
+          busy = false; renderBoxes();
           return I.confirmBox('Please check', r.needConfirm.map(function (c) { return c.message; }).join('\n\n'), 'Upload anyway').then(function (yes) {
             if (!yes) return;
             var c = Object.assign({}, confirm || {});
             r.needConfirm.forEach(function (x) { c[x.key] = true; });
-            return runOne(ft, c);
+            return run(types, c);
           });
         }
-        delete detected[ft];
+        types.forEach(function (ft) { delete detected[ft]; });
+        S.boot.uploads = r.uploads; I.Store.set('boot.' + S.branchId, S.boot);
         showSummary(card, r);
-        return refreshStatus();
+        busy = false; renderBoxes(); renderUndo();
+        window.App.dataChanged();
       }).catch(function (e) {
-        I.clear(card).appendChild(h('div', { class: 'msg err' }, S.boot.fileTypes[ft] + ': ' + I.errText(e)));
+        busy = false; renderBoxes();
+        I.clear(card).appendChild(h('div', { class: 'msg err' }, 'Upload failed: ' + I.errText(e) + ' Nothing was saved; you can try again.'));
       });
     }
 
     function showSummary(card, r) {
       I.clear(card);
-      card.appendChild(h('div', { class: 'row between' }, h('h2', null, r.fileLabel + ' uploaded · ' + r.slot), h('span', { class: 'small muted' }, r.at + ' · ' + r.by)));
-      card.appendChild(h('div', { class: 'sumgrid' },
-        h('div', null, h('b', null, r.new), 'New'), h('div', null, h('b', null, r.updated), 'Updated'),
-        h('div', null, h('b', null, r.unchanged), 'Unchanged'),
-        h('div', null, h('b', null, r.editsKeptPatients || 0), 'Your edits kept'),
-        h('div', null, h('b', null, r.notInLatest), 'Not in latest bed list'),
-        h('div', null, h('b', null, 0), 'Nothing deleted')));
-      if (r.transfersAdded) card.appendChild(h('div', { class: 'small' }, r.transfersAdded + ' bed transfer hop(s) recorded.'));
-      r.warnings.forEach(function (w) { card.appendChild(h('div', { class: 'msg warn' }, w)); });
+      card.appendChild(h('div', { class: 'row between' }, h('h2', null, '✓ Uploaded ' + r.files.length + ' file(s)'), h('span', { class: 'small muted' }, r.at + ' · ' + r.by)));
+      var t = h('table', { class: 't' }, h('tr', null, ['File', 'Slot', 'Rows', 'New', 'Updated', 'Unchanged', 'Your edits kept', 'Not in latest bed list'].map(function (x) { return h('th', null, x); })));
+      r.files.forEach(function (f) {
+        t.appendChild(h('tr', null, h('td', null, h('b', null, f.fileLabel)), h('td', null, f.slot), h('td', null, f.rows), h('td', null, f.new),
+          h('td', null, f.updated), h('td', null, f.unchanged), h('td', null, f.editsKeptPatients || 0), h('td', null, f.fileType === 'bed_occupancy' ? f.notInLatest : '—')));
+      });
+      card.appendChild(h('div', { class: 'tablewrap' }, t));
+      card.appendChild(h('div', { class: 'msg ok small' }, 'Nothing deleted. ' + r.files.reduce(function (n, f) { return n + (f.transfersAdded || 0); }, 0) + ' bed transfer hop(s) recorded.'));
+      r.files.forEach(function (f) {
+        (f.confirmed || []).forEach(function (w) { card.appendChild(h('div', { class: 'msg warn small' }, w + ' (confirmed)')); });
+        (f.warnings || []).forEach(function (w) { card.appendChild(h('div', { class: 'msg warn small' }, f.fileLabel + ': ' + w)); });
+      });
       if (r.unknownBeds.length) {
         var ub = h('div', { class: 'msg warn' }, 'Beds not in the bed list: ');
         r.unknownBeds.forEach(function (b) {
-          ub.appendChild(h('span', { style: 'margin-right:8px' }, b.bed_no + ' (' + (b.ward || '?') + ')',
+          ub.appendChild(h('span', { style: 'margin-right:8px;display:inline-block' }, b.bed_no + ' (' + (b.ward || '?') + ')',
             I.can('manage_lists') ? h('button', { class: 'btn small', style: 'margin-left:4px', onclick: function (ev) {
               ev.target.disabled = true;
               I.Api.call('saveBed', { bed: { bed_no: b.bed_no, ward: b.ward, room: b.room } }).then(function () { ev.target.textContent = 'Added'; S._lists = null; })
@@ -450,17 +458,9 @@
         });
         card.appendChild(ub);
       }
-      if (r.newDoctors.length) card.appendChild(h('div', { class: 'msg info' }, 'New doctors learned: ' + r.newDoctors.join(', ') + '. Merge spellings in Settings > Doctors.'));
-      if (r.newDepartments.length) card.appendChild(h('div', { class: 'msg info' }, 'New departments: ' + r.newDepartments.join(', ') + ' — assign HOD in Settings > Departments.'));
-      if (r.newOrgs.length) card.appendChild(h('div', { class: 'msg info' }, 'New organisations: ' + r.newOrgs.join(', ') + '.'));
-    }
-
-    function refreshStatus() {
-      return I.Api.call('uploadStatus').then(function (st) {
-        S.boot.uploads = st; I.Store.set('boot.' + S.branchId, S.boot);
-        renderBoxes(); renderUndo();
-        window.App.dataChanged();
-      });
+      if (r.newDoctors.length) card.appendChild(h('div', { class: 'msg info small' }, 'New doctors learned: ' + r.newDoctors.join(', ') + '. Merge spellings in Settings > Doctors.'));
+      if (r.newDepartments.length) card.appendChild(h('div', { class: 'msg info small' }, 'New departments: ' + r.newDepartments.join(', ') + ' — assign HOD in Settings > Departments.'));
+      if (r.newOrgs.length) card.appendChild(h('div', { class: 'msg info small' }, 'New organisations: ' + r.newOrgs.join(', ') + '.'));
     }
 
     function renderUndo() {
@@ -471,19 +471,21 @@
         h('div', null, h('b', null, 'Last upload: '), last.label + ' · ' + last.at + ' · ' + last.by),
         h('button', { class: 'btn danger', onclick: function () {
           I.confirmBox('Undo last upload?', 'This reverts only the HIS values brought by "' + last.label + '" at ' + last.at +
-            '. Your edits and all ICC entries stay. Patients that only this file created are hidden, not deleted.', 'Undo').then(function (yes) {
+            '. Your edits and all ICC entries stay. Patients that only this upload created are hidden, not deleted.', 'Undo').then(function (yes) {
             if (!yes) return;
             I.Api.call('undoUpload', { uploadId: last.uploadId }).then(function (u) {
               I.toast('Undone: ' + u.restored + ' restored, ' + u.voidedNew + ' hidden');
               S.patients = {};
-              refreshStatus();
+              return I.Api.call('uploadStatus').then(function (st) {
+                S.boot.uploads = st; I.Store.set('boot.' + S.branchId, S.boot);
+                renderBoxes(); renderUndo(); window.App.dataChanged();
+              });
             }).catch(function (e) { I.toast(I.errText(e), true); });
           });
         } }, 'Undo last upload'))));
     }
 
     renderBoxes(); renderUndo();
-    refreshStatus().catch(function () {});
   };
 
   /* ================= DATA QUALITY ================= */

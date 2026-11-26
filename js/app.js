@@ -31,7 +31,7 @@
     showConfigNeeded: function () {
       I.clear(root).appendChild(h('div', { class: 'auth' }, h('div', { class: 'card' },
         h('h2', null, 'Setup needed'),
-        h('p', null, 'Open js/config.js and paste the Apps Script web app URL into API_URL, then reload.'))));
+        h('p', null, 'Open js/config.js and paste the Apps Script web app URL into API_URL, then reload.')), App.footer()));
     },
 
     /* ---------- auth screens ---------- */
@@ -52,7 +52,7 @@
           btn.disabled = false; btn.textContent = 'Log in';
         });
       } }, h('label', { class: 'f' }, h('span', null, 'Username'), u), h('label', { class: 'f' }, h('span', null, 'Password'), p), err, btn);
-      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form)));
+      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form), App.footer()));
       setTimeout(function () { u.focus(); }, 30);
     },
 
@@ -74,7 +74,7 @@
         h('label', { class: 'f' }, h('span', null, 'Setup code'), code),
         h('label', { class: 'f' }, h('span', null, 'New admin password'), p1),
         h('label', { class: 'f' }, h('span', null, 'Repeat password'), p2), err, btn);
-      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form)));
+      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form), App.footer()));
     },
 
     showChangePassword: function (forced) {
@@ -98,11 +98,17 @@
         h('label', { class: 'f' }, h('span', null, 'New password (8+ characters, letters and numbers)'), p1),
         h('label', { class: 'f' }, h('span', null, 'Repeat new password'), p2), err, btn,
         forced ? h('p', { class: 'small' }, h('a', { href: '#', onclick: function (e) { e.preventDefault(); App.logout(); } }, 'Log out')) : null);
-      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form)));
+      I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' }, form), App.footer()));
     },
 
     logo: function () {
-      return h('div', { class: 'logo' }, h('b', null, 'ICC Hospital Operations'), h('span', { class: 'muted small' }, 'Internal Customer Care'));
+      document.body.classList.add('authbg');
+      return h('div', { class: 'logo' }, h('img', { src: 'img/logo.png', alt: 'Marengo Asia Hospitals', width: 200 }),
+        h('b', null, 'MAHS ICC'), h('span', { class: 'muted small' }, 'Internal Customer Care'));
+    },
+
+    footer: function () {
+      return h('footer', { class: 'credit' }, 'Designed & Developed by IT Department, Marengo Asia Hospital, Surat');
     },
 
     sessionStarted: function (d) {
@@ -138,7 +144,7 @@
       if (!ids.length) {
         I.clear(root).appendChild(h('div', { class: 'auth' }, App.logo(), h('div', { class: 'card' },
           h('p', null, 'Your account has no branch yet. Ask the Admin to give you access.'),
-          h('button', { class: 'btn', onclick: App.logout }, 'Log out'))));
+          h('button', { class: 'btn', onclick: App.logout }, 'Log out')), App.footer()));
         return;
       }
       if (ids.indexOf(S.branchId) < 0) { S.branchId = ids[0]; I.Store.set('branchId', S.branchId); }
@@ -149,15 +155,22 @@
       App.refreshBranch();
     },
 
-    /** Refresh bootstrap and search index in the background; re-render if something changed. */
+    /**
+     * One call on opening: settings, upload status and the patient list (only the changes
+     * since this device's copy). Screens show the cached copy first, then re-render if needed.
+     */
     refreshBranch: function () {
       var bid = S.branchId;
       App.setRefreshing(true);
-      return I.Api.call('bootstrap').then(function (boot) {
+      return I.Api.call('bootstrap', { indexVersion: S.index ? S.index.version : '' }).then(function (boot) {
         if (bid !== S.branchId) return;
+        var ix = boot.index;
+        delete boot.index;
         var changed = !S.boot || S.boot.dataVersion !== boot.dataVersion;
         S.boot = boot; I.Store.set('boot.' + bid, boot);
-        return App.refreshIndex().then(function () { if (changed) App.render(); });
+        var res = I.applyIndex(ix);
+        if (res === 'need-full') return App.refreshIndex(true).then(function () { App.render(); });
+        if (changed || res) App.render();
       }).catch(function (e) {
         if (e.code !== 'SESSION') I.toast(I.errText(e), true);
       }).then(function () { App.setRefreshing(false); });
@@ -168,9 +181,9 @@
       var have = S.index && !force ? S.index.version : '';
       return I.Api.call('searchIndex', { version: have }).then(function (ix) {
         if (bid !== S.branchId) return false;
-        if (ix.same) return false;
-        S.index = ix; I.Store.set('index.' + bid, ix);
-        return true;
+        var res = I.applyIndex(ix);
+        if (res === 'need-full') return App.refreshIndex(true);
+        return res;
       });
     },
 
@@ -187,6 +200,7 @@
     },
 
     renderShell: function () {
+      document.body.classList.remove('authbg');
       var p = S.profile;
       var sel = h('select', { 'aria-label': 'Branch', onchange: function () {
         S.branchId = sel.value; I.Store.set('branchId', S.branchId); I.go('home'); App.startBranch();
@@ -211,13 +225,14 @@
       var main = h('main', { class: 'main', id: 'main' });
       I.clear(root).appendChild(h('div', null,
         h('header', { class: 'topbar' },
-          h('span', { class: 'title' }, 'ICC'),
-          Object.keys(p.branches).length > 1 ? sel : h('span', null, p.branches[S.branchId].name),
-          h('span', { id: 'refreshing', class: 'refreshing', style: 'color:#cfe' }),
+          h('a', { class: 'brand', href: '#/home' }, h('img', { src: 'img/mark.png', alt: '', width: 30, height: 30 }), h('span', { class: 'title' }, 'MAHS ICC')),
+          Object.keys(p.branches).length > 1 ? h('span', { class: 'branchsel' }, sel) : h('span', { class: 'branchname' }, p.branches[S.branchId].name),
+          h('span', { id: 'refreshing', class: 'refreshing' }),
           h('span', { class: 'spacer' }),
           h('span', { class: 'user' }, p.user.display_name),
           h('button', { onclick: App.logout, title: 'Log out' }, 'Log out')),
-        h('div', { class: 'layout' }, side, main), bottom));
+        h('div', { class: 'brandline' }),
+        h('div', { class: 'layout' }, side, h('div', { class: 'mainwrap' }, main, App.footer())), bottom));
       App.render();
     },
 

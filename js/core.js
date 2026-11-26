@@ -128,7 +128,7 @@
   }
   function confirmBox(title, text, okLabel) {
     return new Promise(function (resolve) {
-      modal(title, h('p', null, text), [
+      modal(title, h('p', { class: 'preline' }, text), [
         { label: 'Cancel', onClick: function () { resolve(false); } },
         { label: okLabel || 'OK', primary: true, onClick: function () { resolve(true); } }
       ]);
@@ -142,13 +142,15 @@
   }
 
   /* ---------- search over the cached index (on the device) ---------- */
+  var objsCache = { ref: null, list: [] };   // decoded patient list (kept out of localStorage)
+
   function indexObjects() {
     var ix = State.index;
     if (!ix) return [];
-    if (ix._objs) return ix._objs;
+    if (objsCache.ref === ix && objsCache.ver === ix.version && objsCache.n === ix.rows.length) return objsCache.list;
     var cols = ix.cols;
     var groups = (State.boot && State.boot.settings.report_groups) || [];
-    ix._objs = ix.rows.map(function (r) {
+    var list = ix.rows.map(function (r) {
       var o = {};
       for (var i = 0; i < cols.length; i++) o[cols[i]] = r[i];
       o.status = o.st === 'I' ? 'IN' : 'DISCHARGED';
@@ -159,8 +161,35 @@
       o._s = (o.admn_no + ' ' + o.umr_no + ' ' + o.name + ' ' + o.bed + ' ' + o.mobile).toLowerCase();
       return o;
     });
-    return ix._objs;
+    objsCache = { ref: ix, ver: ix.version, n: ix.rows.length, list: list };
+    return list;
   }
+
+  /**
+   * Apply a server answer to the device's patient list: {same}, {delta, rows, removed} or a full list.
+   * Returns true if something changed, false if not, 'need-full' if a delta arrived without a base copy.
+   */
+  function applyIndex(ix) {
+    if (!ix || ix.same) return false;
+    if (ix.delta) {
+      if (!State.index) return 'need-full';
+      var cur = State.index, pos = {};
+      cur.rows.forEach(function (r, i) { pos[r[0]] = i; });
+      ix.rows.forEach(function (r) { if (pos[r[0]] !== undefined) cur.rows[pos[r[0]]] = r; else { pos[r[0]] = cur.rows.length; cur.rows.push(r); } });
+      if (ix.removed && ix.removed.length) {
+        var rm = {};
+        ix.removed.forEach(function (a) { rm[a] = true; });
+        cur.rows = cur.rows.filter(function (r) { return !rm[r[0]]; });
+      }
+      cur.version = ix.version; cur.builtAt = ix.builtAt || Date.now();
+      objsCache.ref = null;
+    } else {
+      State.index = { version: ix.version, cols: ix.cols, rows: ix.rows, builtAt: ix.builtAt };
+    }
+    Store.set('index.' + State.branchId, State.index);
+    return true;
+  }
+
   function searchIndex(q) {
     var list = indexObjects();
     q = String(q || '').trim().toLowerCase();
@@ -187,6 +216,6 @@
   window.ICC = {
     h: h, clear: clear, $: $, fmtD: fmtD, fmtDT: fmtDT, dayStart: dayStart, Store: Store, State: State, Api: Api,
     ApiError: ApiError, toast: toast, errText: errText, modal: modal, confirmBox: confirmBox, can: can,
-    searchIndex: searchIndex, indexObjects: indexObjects, route: route, go: go
+    searchIndex: searchIndex, indexObjects: indexObjects, applyIndex: applyIndex, route: route, go: go
   };
 })();

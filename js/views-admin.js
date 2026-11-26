@@ -132,6 +132,7 @@
       h('div', { class: 'small' }, 'App ' + window.ICC_CONFIG.APP_VERSION + ' · server ' + S.boot.appVersion),
       h('div', { class: 'small muted mono', style: 'word-break:break-all' }, window.ICC_CONFIG.API_URL)));
     benchCard(main);
+    archiveCard(main);
     var audit = h('div');
     main.appendChild(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', null, 'Audit log (latest 300)'),
       h('button', { class: 'btn small', onclick: function () {
@@ -144,6 +145,23 @@
         }).catch(function (e) { I.clear(audit).appendChild(h('div', { class: 'msg err' }, I.errText(e))); });
       } }, 'Load')), audit));
   };
+
+  function archiveCard(main) {
+    var out = h('div');
+    var btn = h('button', { class: 'btn', onclick: function () {
+      btn.disabled = true;
+      I.clear(out).appendChild(h('div', { class: 'small muted' }, h('span', { class: 'spin' }), ' Archiving…'));
+      I.Api.call('runArchive').then(function (r) {
+        I.clear(out).appendChild(h('div', { class: 'msg ok' }, 'Moved to History: ' + r.patientsMoved + ' patients, ' + r.trailMoved + ' edit-trail rows, ' +
+          r.transfersMoved + ' transfer hops, ' + r.undoMoved + ' undo snapshots, ' + r.sessionsMoved + ' old sessions. Patients left in the working table: ' + r.hotLeft + '. Took ' + (r.ms / 1000).toFixed(1) + ' s.'));
+        window.App.refreshIndex(true).then(function () { I.toast('Patient list refreshed'); });
+      }).catch(function (e) { I.clear(out).appendChild(h('div', { class: 'msg err' }, I.errText(e))); })
+        .then(function () { btn.disabled = false; });
+    } }, 'Run archive now');
+    main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Nightly archive'),
+      h('p', { class: 'small muted' }, 'Runs every night at about 02:00. Discharged patients with nothing open move to the yearly History file 30 days after discharge, so the working table stays small and the app stays fast. Nothing is deleted.'),
+      btn, out));
+  }
 
   function median(a) { var s = a.slice().sort(function (x, y) { return x - y; }); return s.length ? s[Math.floor((s.length - 1) / 2)] : 0; }
 
@@ -204,7 +222,12 @@
             return I.Api.call('login', { username: S.profile.user.username, password: pw.value, token: 'none' }, { branch: false });
           });
         })
-        .then(function () { return timed('Open app (bootstrap)', 3, api('bootstrap')); })
+        .then(function () { return timed('Password hash only (server)', 3, function () {
+          return I.Api.call('benchStep', { step: 'hashTiming' }).then(function (d) { return { serverMs: d.ms, bytes: 0 }; });
+        }); })
+        .then(function () { return timed('Open app (settings + list check, one call)', 3, function () {
+          return I.Api.call('bootstrap', { indexVersion: S.index ? S.index.version : '' });
+        }); })
         .then(function () {
           return timed('Patient list download, cold cache', 3, function () {
             return I.Api.call('searchIndex', { version: '' }).then(function (d) { ix = d; });
@@ -229,19 +252,14 @@
           });
         })
         .then(function () {
-          return timed('Upload all 4 HIS files', 2, function () {
-            var total = 0, bytes = 0;
-            return I.Api.call('benchStep', { step: 'makeFiles' }).then(function (files) {
-              var seq = Promise.resolve();
-              ['admission', 'bed_occupancy', 'transfer', 'discharge'].forEach(function (ft) {
-                seq = seq.then(function () {
-                  return I.Api.call('uploadHis', { fileType: ft, fileName: 'bench.xlsx', fields: files[ft].fields, rows: files[ft].rows, meta: {}, confirm: { date: true, branch: true } })
-                    .then(function () { total += I.Api.last.serverMs; bytes += I.Api.last.bytes; });
-                });
-              });
-              return seq.then(function () { return { serverMs: total, bytes: bytes }; });
+          var files = null;
+          // The dummy files are made BEFORE the clock starts; only the upload itself is timed.
+          return timed('Upload all 4 HIS files (one call)', 2, function () {
+            var list = ['admission', 'bed_occupancy', 'transfer', 'discharge'].map(function (ft) {
+              return { fileType: ft, fileName: 'bench.xlsx', fields: files[ft].fields, rows: files[ft].rows, meta: {} };
             });
-          });
+            return I.Api.call('uploadHisBatch', { files: list, confirm: { date: true, branch: true } });
+          }, function () { return I.Api.call('benchStep', { step: 'makeFiles' }).then(function (f) { files = f; }); });
         })
         .then(function () { return timed('Daily summary (census, admissions)', 3, api('homeSummary')); })
         .then(function () { return timed('Older records search (3 years History)', 3, api('searchHistory', { q: 'PATEL' })); })
