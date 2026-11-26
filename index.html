@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f5c6e">
+  <meta name="referrer" content="no-referrer">
+  <title>ICC Hospital Operations</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <div class="boot">Loading…</div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="modal-root"></div>
+
+  <script src="js/config.js"></script>
+  <!-- SheetJS (Excel reader), pinned version. If the CDN is unreachable, a local copy in js/vendor/ is used. -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
+          onerror="var s=document.createElement('script');s.src='js/vendor/xlsx.full.min.js';document.head.appendChild(s);"></script>
+  <script src="js/his-parse.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/views-main.js"></script>
+  <script src="js/views-settings.js"></script>
+  <script src="js/views-admin.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
