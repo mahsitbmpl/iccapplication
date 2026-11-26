@@ -8,14 +8,14 @@
   var root = document.getElementById('app');
 
   var NAV = [
-    { page: 'home', label: 'Home', ico: '⌂' },
-    { page: 'patients', label: 'Patients', ico: '☰' },
-    { page: 'upload', label: 'Upload', ico: '⇪', perm: 'upload' },
-    { page: 'quality', label: 'Quality', ico: '✓' },
-    { page: 'settings', label: 'Settings', ico: '⚙', perm: ['manage_lists', 'manage_departments'] },
-    { page: 'users', label: 'Users', ico: '👤', perm: 'manage_users' },
-    { page: 'system', label: 'System', ico: 'ⓘ', perm: 'manage_users' },
-    { page: 'branches', label: 'Branches', ico: '⌘', superOnly: true }
+    { page: 'home', label: 'Home', ico: 'home' },
+    { page: 'patients', label: 'Patients', ico: 'patients' },
+    { page: 'upload', label: 'Upload', ico: 'upload', perm: 'upload' },
+    { page: 'quality', label: 'Data quality', short: 'Quality', ico: 'quality' },
+    { page: 'settings', label: 'Settings', ico: 'settings', perm: ['manage_lists', 'manage_departments'] },
+    { page: 'users', label: 'Users', ico: 'users', perm: 'manage_users' },
+    { page: 'system', label: 'System', ico: 'system', perm: 'manage_users' },
+    { page: 'branches', label: 'Branches', ico: 'branches', superOnly: true }
   ];
 
   var App = {
@@ -103,8 +103,8 @@
 
     logo: function () {
       document.body.classList.add('authbg');
-      return h('div', { class: 'logo' }, h('img', { src: 'img/logo.png', alt: 'Marengo Asia Hospitals', width: 200 }),
-        h('b', null, 'MAHS ICC'), h('span', { class: 'muted small' }, 'Internal Customer Care'));
+      return h('div', { class: 'logo' }, h('img', { src: 'img/logo.png', alt: 'Marengo Asia Hospitals', width: 190 }),
+        h('span', { class: 'wordmark' }, 'MAHS ICC'), h('span', { class: 'tag' }, 'Internal Customer Care'));
     },
 
     footer: function () {
@@ -196,43 +196,57 @@
 
     setRefreshing: function (on) {
       var el = document.getElementById('refreshing');
-      if (el) el.textContent = on ? 'updating…' : '';
+      if (el) el.textContent = on ? 'Updating…' : '';
     },
 
     renderShell: function () {
       document.body.classList.remove('authbg');
       var p = S.profile;
-      var sel = h('select', { 'aria-label': 'Branch', onchange: function () {
-        S.branchId = sel.value; I.Store.set('branchId', S.branchId); I.go('home'); App.startBranch();
-      } });
-      Object.keys(p.branches).forEach(function (id) {
-        sel.appendChild(h('option', { value: id, selected: id === S.branchId ? 'selected' : null }, p.branches[id].name));
-      });
+      var entry = p.branches[S.branchId];
+      var multi = Object.keys(p.branches).length > 1;
+      function branchControl() {
+        if (!multi) return h('span', { class: 'branchname' }, I.icon('branches', 15), entry.name);
+        var sel = h('select', { 'aria-label': 'Branch', onchange: function () {
+          S.branchId = sel.value; I.Store.set('branchId', S.branchId); I.go('home'); App.startBranch();
+        } });
+        Object.keys(p.branches).forEach(function (id) {
+          sel.appendChild(h('option', { value: id, selected: id === S.branchId ? 'selected' : null }, p.branches[id].name));
+        });
+        return h('label', { class: 'branchsel' }, I.icon('branches', 15), sel);
+      }
       var items = NAV.filter(function (n) {
         if (n.superOnly) return p.user.is_super;
         if (!n.perm) return true;
         return [].concat(n.perm).some(I.can);
       });
-      var side = h('nav', { class: 'sidenav' }), bottom = h('nav', { class: 'bottomnav' });
+      var nav = h('nav', { class: 'navlist', 'aria-label': 'Main' });
       items.forEach(function (n) {
-        side.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, h('span', { class: 'nav-ico' }, n.ico), n.label));
+        nav.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, I.icon(n.ico), h('span', null, n.label)));
       });
+      var initials = String(p.user.display_name || p.user.username).split(/\s+/).map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+      var side = h('aside', { class: 'sidenav' },
+        h('a', { class: 'side-brand', href: '#/home' }, h('span', { class: 'markwrap' }, h('img', { src: 'img/mark.png', alt: '', width: 28, height: 28 })),
+          h('span', null, h('span', { class: 'wordmark' }, 'MAHS ICC'), h('span', { class: 'tagline' }, 'Internal Customer Care'))),
+        h('div', { class: 'brandline' }),
+        nav,
+        h('div', { class: 'side-user' }, h('span', { class: 'avatar' }, initials),
+          h('span', { class: 'who' }, h('b', null, p.user.display_name), h('span', null, entry.role)),
+          h('button', { class: 'iconbtn', title: 'Log out', 'aria-label': 'Log out', onclick: App.logout }, I.icon('logout'))));
+      var bottom = h('nav', { class: 'bottomnav', 'aria-label': 'Main' });
       items.filter(function (n) { return ['home', 'patients', 'upload', 'quality', 'settings'].indexOf(n.page) >= 0; }).forEach(function (n) {
-        bottom.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, h('span', { class: 'nav-ico' }, n.ico), n.label));
+        bottom.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, I.icon(n.ico, 20), h('span', null, n.short || n.label)));
       });
       var more = items.filter(function (n) { return ['users', 'system', 'branches'].indexOf(n.page) >= 0; });
-      if (more.length) bottom.appendChild(h('a', { href: '#/more', 'data-page': 'more' }, h('span', { class: 'nav-ico' }, '⋯'), 'More'));
+      if (more.length) bottom.appendChild(h('a', { href: '#/more', 'data-page': 'more' }, I.icon('more', 20), h('span', null, 'More')));
       var main = h('main', { class: 'main', id: 'main' });
-      I.clear(root).appendChild(h('div', null,
-        h('header', { class: 'topbar' },
-          h('a', { class: 'brand', href: '#/home' }, h('img', { src: 'img/mark.png', alt: '', width: 30, height: 30 }), h('span', { class: 'title' }, 'MAHS ICC')),
-          Object.keys(p.branches).length > 1 ? h('span', { class: 'branchsel' }, sel) : h('span', { class: 'branchname' }, p.branches[S.branchId].name),
-          h('span', { id: 'refreshing', class: 'refreshing' }),
-          h('span', { class: 'spacer' }),
-          h('span', { class: 'user' }, p.user.display_name),
-          h('button', { onclick: App.logout, title: 'Log out' }, 'Log out')),
-        h('div', { class: 'brandline' }),
-        h('div', { class: 'layout' }, side, h('div', { class: 'mainwrap' }, main, App.footer())), bottom));
+      var top = h('header', { class: 'topbar' },
+        h('a', { class: 'top-brand', href: '#/home' }, h('img', { src: 'img/mark.png', alt: '', width: 26, height: 26 }), h('span', { class: 'wordmark' }, 'MAHS ICC')),
+        branchControl(),
+        h('span', { id: 'refreshing', class: 'refreshing' }),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'iconbtn top-logout', title: 'Log out', 'aria-label': 'Log out', onclick: App.logout }, I.icon('logout')));
+      I.clear(root).appendChild(h('div', { class: 'shell' }, side,
+        h('div', { class: 'mainwrap' }, h('div', { class: 'brandline top-line' }), top, main, App.footer()), bottom));
       App.render();
     },
 

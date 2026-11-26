@@ -20,68 +20,76 @@
       discharged: objs.filter(function (o) { return o.status === 'DISCHARGED' && o.dis_dt >= start; }).length,
       notin: inHouse.filter(function (o) { return o.in_latest === 'N'; }).length
     };
-    main.appendChild(h('div', { class: 'row between' }, h('h1', null, 'Today at a glance'),
-      h('span', { class: 'muted small' }, I.fmtD(Date.now()) + (S.index ? ' · list from ' + I.fmtDT(S.index.builtAt) : ''))));
-    function kpi(n, label, list) {
-      return h('div', { class: 'kpi', onclick: function () { I.go('patients/' + list); } }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, label));
+    var day = new Date(Date.now() + 5.5 * 3600000).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+    main.appendChild(h('div', { class: 'pagehead' },
+      h('div', null, h('h1', null, 'Today'), h('div', { class: 'sub' }, day + ', ' + I.fmtD(Date.now()))),
+      S.index ? h('div', { class: 'small muted' }, 'Patient list as of ' + I.fmtDT(S.index.builtAt).slice(11)) : null));
+
+    function tile(ico, n, label, list) {
+      return h('button', { onclick: function () { I.go('patients/' + list); } },
+        h('span', { class: 'ic' }, I.icon(ico, 20)), h('span', null, h('span', { class: 'n' }, n), h('span', { class: 'l' }, label)));
     }
-    main.appendChild(h('div', { class: 'grid k4' }, kpi(k.inhouse, 'In-house', 'inhouse'), kpi(k.admitted, 'Admitted today', 'admitted'),
-      kpi(k.transferred, 'Transferred today', 'transferred'), kpi(k.discharged, 'Discharged today', 'discharged')));
+    main.appendChild(h('div', { class: 'today' }, tile('bed', k.inhouse, 'In-house', 'inhouse'), tile('admitted', k.admitted, 'Admitted today', 'admitted'),
+      tile('transfer', k.transferred, 'Transferred today', 'transferred'), tile('discharged', k.discharged, 'Discharged today', 'discharged')));
     if (k.notin) {
-      main.appendChild(h('div', { class: 'msg warn', style: 'cursor:pointer', onclick: function () { I.go('patients/notin'); } },
-        k.notin + ' in-house patient(s) are not in the latest bed list (no discharge received yet).'));
+      main.appendChild(h('div', { class: 'msg warn', style: 'cursor:pointer', onclick: function () { I.go('patients/notin'); } }, I.icon('alert'),
+        h('span', null, k.notin + ' in-house patient' + (k.notin > 1 ? 's are' : ' is') + ' missing from the latest bed list and no discharge has arrived yet. Open the list.')));
     }
 
-    // Upload slots
-    var up = (S.boot.uploads && S.boot.uploads.boxes) || {};
-    var upCard = h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', null, 'HIS uploads today'),
-      I.can('upload') ? h('a', { href: '#/upload' }, 'Upload files') : null));
-    var g = h('div', { class: 'grid k4' });
-    Object.keys(up).forEach(function (ft) {
-      var b = up[ft];
-      g.appendChild(h('div', { class: 'box' }, h('h4', null, b.label),
-        ['Morning', 'Evening'].map(function (slot) {
-          var s = b[slot];
-          return h('div', { class: 'slot' + (s ? '' : ' missing') }, slot + ': ', s ? (s.at.slice(11) + ' · ' + s.by + ' · ' + s.rows + ' rows') : 'not uploaded');
-        })));
-    });
-    upCard.appendChild(g);
-    main.appendChild(upCard);
-
-    // Census by report group (Stay = in-house now) with unit split
+    // The building: report groups from the top floor down, Stay = in-house now.
     var groups = S.boot.settings.report_groups || [];
-    var census = h('div', { class: 'card' }, h('h2', null, 'Floor census (Stay = in-house now)'));
-    var t = h('table', { class: 't' }, h('tr', null, h('th', null, 'Group'), h('th', null, 'Stay'), h('th', null, 'Admitted today'), h('th', null, 'Discharged today')));
+    var floors = h('ul', { class: 'floors' });
     groups.forEach(function (gr) {
       var mine = objs.filter(function (o) { return o.group === gr.name; });
       var stay = mine.filter(function (o) { return o.status === 'IN'; });
-      var unitTxt = '';
+      var chips = h('div', { class: 'unitchips' });
       if (gr.units && gr.units.length) {
-        var parts = gr.units.map(function (u) { return u + ': ' + p2(stay.filter(function (o) { return o.unit === u; }).length); });
-        var unassigned = stay.filter(function (o) { return !o.unit || gr.units.indexOf(o.unit) < 0; }).length;
-        if (unassigned) parts.push('Unassigned: ' + p2(unassigned));
-        unitTxt = '(' + parts.join(' || ') + ')';
+        gr.units.forEach(function (u) { chips.appendChild(h('span', { class: 'unitchip' }, u + ' ' + p2(stay.filter(function (o) { return o.unit === u; }).length))); });
+        var un = stay.filter(function (o) { return !o.unit || gr.units.indexOf(o.unit) < 0; }).length;
+        if (un) chips.appendChild(h('span', { class: 'unitchip un' }, 'Unassigned ' + p2(un)));
       }
-      t.appendChild(h('tr', null, h('td', null, h('b', null, gr.name), unitTxt ? h('div', { class: 'small muted' }, unitTxt) : null), h('td', null, h('b', null, p2(stay.length))),
-        h('td', null, p2(mine.filter(function (o) { return o.admn_dt >= start; }).length)),
-        h('td', null, p2(mine.filter(function (o) { return o.status === 'DISCHARGED' && o.dis_dt >= start; }).length))));
+      var m = String(gr.name).match(/^(\d+)/);
+      floors.appendChild(h('li', null,
+        h('span', { class: 'plate' }, h('b', null, m ? m[1] : gr.name.slice(0, 3)), h('span', null, m ? 'floor' : '')),
+        h('div', { class: 'floor-main' }, h('div', { class: 'stay' }, p2(stay.length), h('small', null, 'in-house · ' + gr.name)), chips),
+        h('div', { class: 'floor-move' },
+          h('span', null, I.icon('admitted', 14), p2(mine.filter(function (o) { return o.admn_dt >= start; }).length) + ' in'),
+          h('span', null, I.icon('discharged', 14), p2(mine.filter(function (o) { return o.status === 'DISCHARGED' && o.dis_dt >= start; }).length) + ' out'))));
     });
-    census.appendChild(h('div', { class: 'tablewrap' }, t));
-    main.appendChild(census);
+    var left = h('div', null, h('div', { class: 'card' }, h('h2', null, 'Floors'), floors));
+
+    // HIS uploads checklist
+    var up = (S.boot.uploads && S.boot.uploads.boxes) || {};
+    var cl = h('ul', { class: 'checklist' });
+    ['admission', 'bed_occupancy', 'transfer', 'discharge'].forEach(function (ft) {
+      var b = up[ft];
+      if (!b) return;
+      cl.appendChild(h('li', null, h('span', { class: 'fname' }, b.label),
+        ['Morning', 'Evening'].map(function (slot) {
+          var s = b[slot];
+          return h('span', { class: 'slotpill ' + (s ? 'done' : 'missing'), title: s ? s.by + ' · ' + s.rows + ' rows' : 'Not uploaded yet' },
+            I.icon(s ? 'check' : 'circle', 13), slot + (s ? ' ' + s.at.slice(11) : ''));
+        })));
+    });
+    var right = h('div', null, h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', null, 'HIS uploads today'),
+      I.can('upload') ? h('a', { href: '#/upload', class: 'small' }, 'Upload files') : null), cl));
 
     // Admissions today by payment category
     var cats = S.boot.paymentCategories.concat(['Unassigned']);
     var adm = objs.filter(function (o) { return o.admn_dt >= start; });
-    var at = h('table', { class: 't' });
-    cats.forEach(function (c) {
-      var n = adm.filter(function (o) { return (o.payment_cat || 'Unassigned') === c; }).length;
-      if (c === 'Unassigned' && !n) return;
-      at.appendChild(h('tr', null, h('td', null, c), h('td', { class: 'right' }, h('b', null, p2(n)))));
+    var counts = cats.map(function (c) { return adm.filter(function (o) { return (o.payment_cat || 'Unassigned') === c; }).length; });
+    var max = Math.max.apply(null, counts.concat([1]));
+    var bars = h('ul', { class: 'bars' });
+    cats.forEach(function (c, i) {
+      if (c === 'Unassigned' && !counts[i]) return;
+      bars.appendChild(h('li', null, h('span', null, c), h('span', { class: 'track' }, h('span', { class: 'fill', style: 'display:block;width:' + Math.round(counts[i] / max * 100) + '%' })),
+        h('span', { class: 'v' }, p2(counts[i]))));
     });
-    at.appendChild(h('tr', null, h('td', null, h('b', null, 'Admission Details (total)')), h('td', { class: 'right' }, h('b', null, p2(adm.length)))));
-    main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Admissions today by payment category'), at));
-    main.appendChild(h('p', { class: 'small muted' }, h('a', { href: '#/quality' }, 'Data-quality list'), ' · ',
+    bars.appendChild(h('li', { class: 'total' }, h('span', null, 'Admission details'), h('span'), h('span', { class: 'v' }, p2(adm.length))));
+    right.appendChild(h('div', { class: 'card' }, h('h2', null, 'Admissions today by payment category'), bars));
+    right.appendChild(h('p', { class: 'small' }, h('a', { href: '#/quality' }, 'Open the data-quality list'), '  ·  ',
       h('a', { href: '#', onclick: function (e) { e.preventDefault(); window.App.showChangePassword(false); } }, 'Change my password')));
+    main.appendChild(h('div', { class: 'cols' }, left, right));
   };
 
   /* ================= PATIENTS ================= */
@@ -94,12 +102,13 @@
     var q = sessionStorage.getItem('icc.q') || '';
     var quick = arg || (q ? '' : 'inhouse');
     var pageSize = 50, shown = pageSize, deptFilter = '';
-    var input = h('input', { type: 'search', placeholder: 'Search bed, name, IP no, UMR no, mobile', value: q, 'aria-label': 'Search patients' });
+    var input = h('input', { type: 'search', placeholder: 'Search by bed, name, IP no, UMR no or mobile', value: q, 'aria-label': 'Search patients' });
     var chips = h('div', { class: 'chips' });
     var listBox = h('div');
     var olderBox = h('div');
-    main.appendChild(h('h1', null, 'Patients'));
-    main.appendChild(h('div', { class: 'card' }, input, chips, listBox, olderBox));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Patients'),
+      h('div', { class: 'sub' }, I.indexObjects().filter(function (o) { return o.status === 'IN'; }).length + ' in-house now'))));
+    main.appendChild(h('div', { class: 'card' }, h('div', { class: 'searchbox' }, I.icon('search'), input), chips, listBox, olderBox));
     function renderChips() {
       I.clear(chips);
       QUICK.forEach(function (c) {
@@ -167,13 +176,13 @@
     if (o.status !== 'IN') badges.push(h('span', { class: 'badge grey' }, 'Discharged ' + I.fmtD(o.dis_dt)));
     if (o.flags && o.flags.indexOf('V') >= 0) badges.push(h('span', { class: 'badge warn' }, 'VIP'));
     if (o.flags && o.flags.indexOf('R') >= 0) badges.push(h('span', { class: 'badge' }, 'Repeat'));
-    if (o.status === 'IN' && o.in_latest === 'N') badges.push(h('span', { class: 'badge bad' }, 'Not in latest bed list'));
+    if (o.status === 'IN' && o.in_latest === 'N') badges.push(h('span', { class: 'badge warn' }, 'Not in latest bed list'));
     if (o.payment_cat) badges.push(h('span', { class: 'badge grey' }, o.payment_cat));
-    if (o.unit) badges.push(h('span', { class: 'badge ok' }, o.unit));
+    if (o.unit) badges.push(h('span', { class: 'badge grey' }, o.unit));
     return h('li', { onclick: function () { I.go('patient/' + encodeURIComponent(o.admn_no)); } },
       h('div', { class: 'pt-row' }, h('span', { class: 'bed' }, o.bed || '—'),
-        h('div', null, h('div', { class: 'nm' }, o.name), h('div', { class: 'small muted' }, o.admn_no + ' · ' + o.umr_no + (o.group ? ' · ' + o.group : '') + ' · adm ' + I.fmtD(o.admn_dt)),
-          h('div', null, badges))));
+        h('div', null, h('div', { class: 'nm' }, o.name), h('div', { class: 'small muted' }, o.admn_no + '  ·  ' + o.umr_no + (o.group ? '  ·  ' + o.group : '') + '  ·  admitted ' + I.fmtD(o.admn_dt)),
+          badges.length ? h('div', null, badges) : null), h('span', { class: 'chev' }, I.icon('chevron'))));
   }
 
   /* ================= PATIENT CARD ================= */
@@ -182,7 +191,7 @@
 
   Views.patient = function (main, admn, noFetch) {
     var box = h('div');
-    main.appendChild(h('div', { class: 'row' }, h('a', { href: '#/patients' }, '← Patients')));
+    main.appendChild(h('a', { class: 'backlink', href: '#/patients' }, I.icon('back', 16), 'Patients'));
     main.appendChild(box);
     var cached = S.patients[admn];
     if (cached) renderCard(box, cached);
@@ -201,30 +210,32 @@
     I.clear(box);
     var lb = S.boot.labels;
     var b = p.badges;
-    var head = h('div', { class: 'card' },
-      h('h1', { style: 'margin-bottom:4px' }, p.name),
-      h('div', { class: 'muted small' }, 'IP ' + p.admn_no + ' · UMR ' + p.umr_no + (p.report_group ? ' · ' + p.report_group : '')),
-      h('div', { style: 'margin-top:8px' },
-        h('span', { class: 'badge ' + (p.status === 'IN' ? 'ok' : 'grey') }, p.status === 'IN' ? 'In-house' : 'Discharged ' + p.dis_dt_f),
-        b.vip ? h('span', { class: 'badge warn' }, 'VIP') : null,
-        b.readmission ? h('span', { class: 'badge bad' }, 'Re-admission (' + b.readmissionDays + ' days)') : (b.repeat ? h('span', { class: 'badge' }, 'Repeat admission') : null),
-        h('span', { class: 'badge grey' }, b.payment_cat || 'Payment: unassigned'),
-        h('span', { class: 'badge ' + (b.unit === 'Unassigned' ? 'warn' : 'ok') }, 'Unit: ' + b.unit),
-        b.er ? h('span', { class: 'badge' }, 'Via ER') : null,
-        p.source === 'MANUAL' ? h('span', { class: 'badge warn' }, 'Not from HIS') : null,
-        p.status === 'IN' && p.in_latest === 'N' ? h('span', { class: 'badge bad' }, 'Not in latest bed list since ' + p.not_in_list_since) : null,
-        p.fromHistory ? h('span', { class: 'badge grey' }, 'History ' + p.fromHistory) : null));
+    var head = h('div', { class: 'card' }, h('div', { class: 'pt-head' },
+      h('span', { class: 'bedplate' }, h('b', null, p.fields.bed.value || '—'), h('span', null, p.report_group || 'bed')),
+      h('div', null,
+        h('h1', null, p.name),
+        h('div', { class: 'pt-ids' }, h('span', null, 'IP ' + p.admn_no), h('span', null, 'UMR ' + p.umr_no), p.fields.consultant.value ? h('span', null, p.fields.consultant.value) : null),
+        h('div', null,
+          h('span', { class: 'badge ' + (p.status === 'IN' ? 'ok' : 'grey') }, p.status === 'IN' ? 'In-house' : 'Discharged ' + p.dis_dt_f),
+          b.vip ? h('span', { class: 'badge warn' }, 'VIP') : null,
+          b.readmission ? h('span', { class: 'badge bad' }, 'Re-admission (' + b.readmissionDays + ' days)') : (b.repeat ? h('span', { class: 'badge' }, 'Repeat admission') : null),
+          h('span', { class: 'badge navy' }, b.payment_cat || 'Payment: unassigned'),
+          h('span', { class: 'badge ' + (b.unit === 'Unassigned' ? 'warn' : 'grey') }, 'Unit: ' + b.unit),
+          b.er ? h('span', { class: 'badge' }, 'Via ER') : null,
+          p.source === 'MANUAL' ? h('span', { class: 'badge warn' }, 'Not from HIS') : null,
+          p.status === 'IN' && p.in_latest === 'N' ? h('span', { class: 'badge warn' }, 'Not in latest bed list since ' + p.not_in_list_since) : null,
+          p.fromHistory ? h('span', { class: 'badge grey' }, 'History ' + p.fromHistory) : null))));
     box.appendChild(head);
 
-    var locked = h('div', { class: 'card' }, h('h2', null, 'From HIS (locked)'));
+    var locked = h('div', { class: 'card' }, h('h2', null, 'From HIS'), h('p', { class: 'small muted', style: 'margin:-6px 0 6px' }, 'These come from HIS and cannot be edited.'));
     var lg = h('div', { class: 'fieldgrid' });
-    function lockRow(k, v) { lg.appendChild(h('div', { class: 'fld' }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v || '—'), h('span', { class: 'lock', title: 'From HIS, not editable' }, '🔒'))); }
+    function lockRow(k, v) { lg.appendChild(h('div', { class: 'fld' }, h('span', { class: 'k' }, k), h('span', { class: 'v' }, v || '—'), h('span', { class: 'lock', title: 'From HIS, not editable' }, I.icon('lock', 14)))); }
     lockRow('UMR No', p.umr_no);
     lockRow('IP No', p.admn_no);
     lockRow('Name', p.name);
     var tel = String(p.mobile || '').replace(/[^\d+]/g, '');
     lg.appendChild(h('div', { class: 'fld' }, h('span', { class: 'k' }, 'Mobile'),
-      h('span', { class: 'v' }, tel.length >= 10 ? h('a', { href: 'tel:' + tel }, p.mobile) : (p.mobile || '—')), h('span', { class: 'lock' }, '🔒')));
+      h('span', { class: 'v' }, tel.length >= 10 ? h('a', { href: 'tel:' + tel }, p.mobile) : (p.mobile || '—')), h('span', { class: 'lock' }, I.icon('lock', 14))));
     lockRow('Address', p.address);
     lockRow('Responsible person / alternate', p.alt_contact);
     lockRow('Admission', p.admn_dt_f);
@@ -233,7 +244,7 @@
     locked.appendChild(lg);
     box.appendChild(locked);
 
-    var ed = h('div', { class: 'card' }, h('h2', null, 'Details (editable)'));
+    var ed = h('div', { class: 'card' }, h('h2', null, 'Details'), h('p', { class: 'small muted', style: 'margin:-6px 0 6px' }, 'Edit a value when HIS is wrong. HIS uploads never overwrite your edit.'));
     var eg = h('div', { class: 'fieldgrid' });
     var canEdit = I.can('edit_patient') && !p.fromHistory;
     FIELD_ORDER.forEach(function (f) {
@@ -241,7 +252,7 @@
       eg.appendChild(h('div', { class: 'fld' }, h('span', { class: 'k' }, lb[f] || f),
         h('span', { class: 'v' }, fd.value || (f === 'unit' ? 'Unassigned' : '—'),
           fd.differs ? h('span', { class: 'hisdiff' }, 'HIS differs: ' + (fd.his || 'blank')) : null),
-        canEdit ? h('button', { class: 'btn small', onclick: function () { editField(p, f); } }, 'Edit') : null));
+        canEdit ? h('button', { class: 'btn small', 'aria-label': 'Edit ' + (lb[f] || f), onclick: function () { editField(p, f); } }, I.icon('edit', 14), 'Edit') : null));
     });
     ed.appendChild(eg);
     box.appendChild(ed);
@@ -346,7 +357,7 @@
     var results = h('div');
     var fileInput = h('input', { type: 'file', accept: '.xlsx,.xls,.csv', multiple: true, class: 'hidden', onchange: function () { readFiles(fileInput.files); fileInput.value = ''; } });
     var drop = h('div', { class: 'drop', onclick: function () { if (!busy) fileInput.click(); } },
-      h('b', null, 'Tap to choose HIS files, or drop them here'),
+      I.icon('upload', 28), h('b', null, 'Choose HIS files, or drop them here'),
       h('div', { class: 'small muted' }, 'Bed Occupancy, Admission List, Discharge Report, Bed Transfer — any order, one or several at once. Each file is recognised by its column headings.'));
     ['dragover', 'dragenter'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
@@ -355,7 +366,7 @@
     var uploadAll = h('button', { class: 'btn primary', disabled: true, onclick: function () { run(ORDER.filter(function (ft) { return detected[ft]; })); } }, 'Upload all detected files');
     var clearBtn = h('button', { class: 'btn', disabled: true, onclick: function () { detected = {}; renderBoxes(); } }, 'Clear');
     var undoBox = h('div');
-    main.appendChild(h('h1', null, 'Upload HIS files'));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Upload HIS files'), h('div', { class: 'sub' }, 'Upload twice a day: morning and evening.'))));
     main.appendChild(h('div', { class: 'card' }, drop, fileInput, boxesWrap, h('div', { class: 'row', style: 'margin-top:12px' }, uploadAll, clearBtn)));
     main.appendChild(results);
     main.appendChild(undoBox);
@@ -371,7 +382,7 @@
           h('h4', null, S.boot.fileTypes[ft]),
           ['Morning', 'Evening'].map(function (slot) {
             var x = st[slot];
-            return h('div', { class: 'slot' + (x ? ' done' : ' missing') }, (x ? '✓ ' : '○ ') + slot + ': ' + (x ? x.at.slice(11) + ' · ' + x.by + ' · ' + x.rows + ' rows' : 'not uploaded'));
+            return h('div', { class: 'slot' + (x ? ' done' : ' missing') }, I.icon(x ? 'check' : 'circle', 14), slot + ': ' + (x ? x.at.slice(11) + ', ' + x.by + ', ' + x.rows + ' rows' : 'not uploaded'));
           }),
           d ? h('div', { class: 'file' }, h('div', { class: 'fname', title: d.fileName }, d.fileName),
             h('div', { class: 'small' }, d.rows.length + ' rows' + (d.meta.dateTo ? ' · dated ' + I.fmtD(d.meta.dateTo) : '')),
@@ -434,7 +445,7 @@
 
     function showSummary(card, r) {
       I.clear(card);
-      card.appendChild(h('div', { class: 'row between' }, h('h2', null, '✓ Uploaded ' + r.files.length + ' file(s)'), h('span', { class: 'small muted' }, r.at + ' · ' + r.by)));
+      card.appendChild(h('div', { class: 'row between' }, h('h2', null, 'Uploaded ' + r.files.length + ' file(s)'), h('span', { class: 'small muted' }, r.at + ' · ' + r.by)));
       var t = h('table', { class: 't' }, h('tr', null, ['File', 'Slot', 'Rows', 'New', 'Updated', 'Unchanged', 'Your edits kept', 'Not in latest bed list'].map(function (x) { return h('th', null, x); })));
       r.files.forEach(function (f) {
         t.appendChild(h('tr', null, h('td', null, h('b', null, f.fileLabel)), h('td', null, f.slot), h('td', null, f.rows), h('td', null, f.new),
@@ -490,7 +501,7 @@
 
   /* ================= DATA QUALITY ================= */
   Views.quality = function (main) {
-    main.appendChild(h('h1', null, 'Data quality'));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Data quality'), h('div', { class: 'sub' }, 'Things in the HIS data to check or correct.'))));
     var box = h('div', null, h('span', { class: 'spin' }), ' Checking…');
     main.appendChild(box);
     var titles = {
@@ -522,7 +533,7 @@
 
   /* ================= MORE (phone menu) ================= */
   Views.more = function (main) {
-    main.appendChild(h('h1', null, 'More'));
+    main.appendChild(h('div', { class: 'pagehead' }, h('h1', null, 'More')));
     var ul = h('ul', { class: 'list card' });
     if (I.can('manage_users')) {
       ul.appendChild(h('li', { onclick: function () { I.go('users'); } }, 'Users and permissions'));

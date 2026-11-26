@@ -10,8 +10,8 @@
   Views.users = function (main) {
     if (!I.can('manage_users')) { main.appendChild(h('div', { class: 'msg err' }, 'No permission.')); return; }
     var box = h('div', null, h('span', { class: 'spin' }));
-    main.appendChild(h('div', { class: 'row between' }, h('h1', null, 'Users · ' + S.boot.branch.name),
-      h('button', { class: 'btn primary', onclick: function () { editUser(null); } }, '+ Add user')));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Users'), h('div', { class: 'sub' }, 'Who can sign in to ' + S.boot.branch.name + ', and what each person can do.')),
+      h('button', { class: 'btn primary', onclick: function () { editUser(null); } }, 'Add user')));
     main.appendChild(box);
     var meta = null;
     function load() {
@@ -92,7 +92,7 @@
   Views.branches = function (main) {
     if (!S.profile.user.is_super) { main.appendChild(h('div', { class: 'msg err' }, 'Only the main admin manages branches.')); return; }
     var box = h('div', null, h('span', { class: 'spin' }));
-    main.appendChild(h('div', { class: 'row between' }, h('h1', null, 'Branches'), h('button', { class: 'btn primary', onclick: function () { edit({}); } }, '+ Add branch')));
+    main.appendChild(h('div', { class: 'pagehead' }, h('h1', null, 'Branches'), h('button', { class: 'btn primary', onclick: function () { edit({}); } }, 'Add branch')));
     main.appendChild(box);
     function load() {
       I.Api.call('listBranches', {}, { branch: false }).then(function (list) {
@@ -127,7 +127,7 @@
   /* ================= SYSTEM: benchmark + audit ================= */
   Views.system = function (main) {
     if (!I.can('manage_users')) { main.appendChild(h('div', { class: 'msg err' }, 'No permission.')); return; }
-    main.appendChild(h('h1', null, 'System'));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'System'), h('div', { class: 'sub' }, 'Speed check, nightly archive and audit log.'))));
     main.appendChild(h('div', { class: 'card' }, h('h2', null, 'About'),
       h('div', { class: 'small' }, 'App ' + window.ICC_CONFIG.APP_VERSION + ' · server ' + S.boot.appVersion),
       h('div', { class: 'small muted mono', style: 'word-break:break-all' }, window.ICC_CONFIG.API_URL)));

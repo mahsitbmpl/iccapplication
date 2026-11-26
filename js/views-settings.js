@@ -17,7 +17,7 @@
     var tabs = TABS.filter(function (t) { return I.can(t[2]); });
     if (!tabs.length) { main.appendChild(h('div', { class: 'msg err' }, 'No permission.')); return; }
     var cur = tabs.some(function (t) { return t[0] === arg; }) ? arg : tabs[0][0];
-    main.appendChild(h('h1', null, 'Settings · ' + S.boot.branch.name));
+    main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Settings'), h('div', { class: 'sub' }, 'Lists and rules for ' + S.boot.branch.name + '.'))));
     var bar = h('div', { class: 'tabs' });
     tabs.forEach(function (t) { bar.appendChild(h('a', { class: t[0] === cur ? 'on' : '', href: '#/settings/' + t[0] }, t[1])); });
     main.appendChild(bar);
@@ -75,7 +75,7 @@
       wrap.appendChild(h('div', { class: 'tablewrap' }, t));
       var saveBtn = h('button', { class: 'btn primary', onclick: function () { onSave(rows, saveBtn); } }, 'Save');
       wrap.appendChild(h('div', { class: 'row', style: 'margin-top:8px' },
-        opts.noAdd ? null : h('button', { class: 'btn', onclick: function () { var n = {}; cols.forEach(function (c) { n[c.key] = c.type === 'check' ? false : c.type === 'csv' ? [] : ''; }); rows.push(n); render(); } }, '+ Add row'),
+        opts.noAdd ? null : h('button', { class: 'btn', onclick: function () { var n = {}; cols.forEach(function (c) { n[c.key] = c.type === 'check' ? false : c.type === 'csv' ? [] : ''; }); rows.push(n); render(); } }, 'Add row'),
         saveBtn));
     }
     render();
@@ -255,7 +255,7 @@
   function tabDepartments(box) {
     var listBox = h('div', null, h('span', { class: 'spin' }));
     box.appendChild(h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', null, 'Departments'),
-      h('button', { class: 'btn primary small', onclick: function () { editDept({ type: 'service', active: 'Y', issue_types: [] }); } }, '+ Add department')),
+      h('button', { class: 'btn primary small', onclick: function () { editDept({ type: 'service', active: 'Y', issue_types: [] }); } }, 'Add department')),
       h('p', { class: 'small muted' }, 'Departments are never deleted, only deactivated. New clinical departments from HIS appear as "New, assign HOD".'), listBox));
     function load() {
       I.Api.call('listDepartments').then(function (deps) {
