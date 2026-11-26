@@ -247,15 +247,29 @@
         })
         .then(function () { return timed('Patient card', 5, function () { return I.Api.call('getPatient', { admn_no: admns[k++ % admns.length] }); }); })
         .then(function () {
+          var parts = [];
           return timed('Save an edit (unit)', 3, function () {
-            return I.Api.call('editPatient', { admn_no: admns[0], changes: { unit: (unitFlip++ % 2) ? 'Medical' : 'Chemo' }, note: 'benchmark' });
+            return I.Api.call('editPatient', { admn_no: admns[0], changes: { unit: (unitFlip++ % 2) ? 'Medical' : 'Chemo' }, note: 'benchmark' })
+              .then(function (d) { if (d.timings) parts.push(d.timings); });
+          }).then(function () {
+            if (!parts.length) return;
+            // Server time split of the last save: where the seconds go.
+            var t = parts[parts.length - 1], prev = 0, txt = [];
+            ['lock', 'open', 'read', 'prepare', 'write', 'cache'].forEach(function (k) {
+              if (t[k] === undefined) return;
+              txt.push(k + ' ' + ((t[k] - prev) / 1000).toFixed(2) + 's');
+              prev = t[k];
+            });
+            var line = 'Save breakdown (server): ' + txt.join(', ');
+            results.push({ label: line, n: 1, med: 0, max: 0, srv: null, kb: null });
+            table.appendChild(h('tr', null, h('td', { colspan: 6, class: 'small muted' }, line)));
           });
         })
         .then(function () {
           var files = null;
           // The dummy files are made BEFORE the clock starts; only the upload itself is timed.
           return timed('Upload all 4 HIS files (one call)', 2, function () {
-            var list = ['admission', 'bed_occupancy', 'transfer', 'discharge'].map(function (ft) {
+            var list = ['admission', 'bed_occupancy', 'transfer', 'discharge'].filter(function (ft) { return files[ft].rows.length; }).map(function (ft) {
               return { fileType: ft, fileName: 'bench.xlsx', fields: files[ft].fields, rows: files[ft].rows, meta: {} };
             });
             return I.Api.call('uploadHisBatch', { files: list, confirm: { date: true, branch: true } });
@@ -265,8 +279,8 @@
         .then(function () { return timed('Older records search (3 years History)', 3, api('searchHistory', { q: 'PATEL' })); })
         .then(function () {
           status.textContent = 'Done.';
-          var txt = 'ICC benchmark ' + I.fmtDT(Date.now()) + '\nDevice: ' + navigator.userAgent + '\nData: ' + JSON.stringify(sizes) + '\n' +
-            results.map(function (r) { return r.label + ' | runs ' + r.n + ' | median ' + r.med.toFixed(2) + 's | slowest ' + r.max.toFixed(2) + 's | server ' + (r.srv === null ? '-' : r.srv.toFixed(2) + 's') + (r.kb ? ' | ' + r.kb + ' KB' : ''); }).join('\n');
+          var txt = 'MAHS ICC benchmark ' + I.fmtDT(Date.now()) + '\nDevice: ' + navigator.userAgent + '\nData: ' + JSON.stringify(sizes) + '\n' +
+            results.map(function (r) { if (r.label.indexOf('Save breakdown') === 0) return r.label; return r.label + ' | runs ' + r.n + ' | median ' + r.med.toFixed(2) + 's | slowest ' + r.max.toFixed(2) + 's | server ' + (r.srv === null ? '-' : r.srv.toFixed(2) + 's') + (r.kb ? ' | ' + r.kb + ' KB' : ''); }).join('\n');
           var ta = h('textarea', { rows: 8, class: 'mono' }, txt);
           out.appendChild(h('div', { class: 'small', style: 'margin-top:8px' }, 'Data size: ' + sizes.Patients + ' hot patients, ' + sizes.historyPatients + ' history patients (' + sizes.historyYears.join(', ') + '), ' + sizes.Sessions + ' sessions.'));
           out.appendChild(h('h3', null, 'Copy these results back into the chat'));
