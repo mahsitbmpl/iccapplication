@@ -7,7 +7,7 @@
   var I = window.ICC, h = I.h, S = I.State;
   var Views = window.Views = window.Views || {};
 
-  var SECTION_ORDER = ['active_feedback', 'discharge_call', 'night_ipd', 'complaint', 'dama_dor', 'room_upgrade', 'wow',
+  var SECTION_ORDER = ['active_feedback', 'google_review', 'discharge_call', 'night_ipd', 'complaint', 'dama_dor', 'room_upgrade', 'wow',
     'video_feedback', 'loyalty', 'lead_homecare', 'lead_campaign', 'lead_success', 'pcc', 'tablet'];
   var GENERAL_KINDS = ['google_review', 'active_feedback', 'complaint', 'night_opd', 'lama', 'lead_success', 'training',
     'special_activity', 'ambulance_108', 'care_coach'];
@@ -151,7 +151,7 @@
         el = seg(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], cur === '' ? '' : String(cur), 'nps');
         field = h('div', { class: 'f wide' });
       } else if (f.t === 'sel' || f.t === 'reason') {
-        var opts2 = f.opts || (settings()[f.list] || []).map(function (o) { return typeof o === 'string' ? o : o.text; });
+        var opts2 = f.opts || (f.pick ? picks[f.pick] || [] : (settings()[f.list] || []).map(function (o) { return typeof o === 'string' ? o : o.text; }));
         el = h('select', null, h('option', { value: '' }, 'Choose…'));
         (f.t === 'reason' ? settings()[f.list] || [] : opts2.map(function (o) { return { text: o }; })).forEach(function (o) {
           el.appendChild(h('option', { value: o.text, selected: o.text === cur ? 'selected' : null }, o.text + (o.avoidable ? '  (avoidable)' : '')));
@@ -545,12 +545,13 @@
       I.clear(listBox).appendChild(h('div', { class: 'muted' }, h('span', { class: 'spin' }), ' Loading…'));
       I.Api.call('listActivities', { from: from.value, to: to.value, kinds: [kind] }).then(function (d) {
         I.clear(listBox);
-        var recs = d.records.filter(function (r) { return kind !== 'active_feedback' && kind !== 'complaint' && kind !== 'lead_success' ? true : !r.admn; });
+        var recs = d.records;
         if (!recs.length) { listBox.appendChild(h('p', { class: 'muted' }, 'No ' + def.label + ' records for these dates.')); return; }
         var ul = h('ul', { class: 'reclist' });
         recs.forEach(function (r) {
-          var who = r.data && r.data.manual ? r.data.manual.name + (r.data.manual.uhid ? ' (' + r.data.manual.uhid + ')' : '') : '';
-          ul.appendChild(h('li', { tabindex: 0, onclick: function () { showRecord(r, load); } },
+          var who = r.data && r.data.manual ? r.data.manual.name + (r.data.manual.uhid ? ' (' + r.data.manual.uhid + ')' : '')
+            : r.admn ? r.name + ' (' + r.admn + ')' : '';
+          ul.appendChild(h('li', { tabindex: 0, onclick: function () { if (r.admn) I.go('patient/' + encodeURIComponent(r.admn)); else showRecord(r, load); } },
             h('div', { class: 'recmain' }, h('span', { class: 'rectext' }, (who ? who + ' · ' : '') + (summary(kind, r.data) || def.label)), stBadge(r),
               r.manual ? h('span', { class: 'badge warn' }, 'Not from HIS') : null),
             h('div', { class: 'small muted' }, fmtDay(r.d) + (r.floor ? ' · ' + r.floor : '') + ' · ' + r.u)));

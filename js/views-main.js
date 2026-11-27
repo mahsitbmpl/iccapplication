@@ -247,6 +247,7 @@
     lg.appendChild(h('div', { class: 'fld' }, h('span', { class: 'k' }, 'Mobile'),
       h('span', { class: 'v' }, tel.length >= 10 ? h('a', { href: 'tel:' + tel }, p.mobile) : (p.mobile || '—')), h('span', { class: 'lock' }, I.icon('lock', 14))));
     lockRow('Address', p.address);
+    lockRow('Area', p.area);
     lockRow('Responsible person / alternate', p.alt_contact);
     lockRow('Admission', p.admn_dt_f);
     lockRow('Discharge', p.dis_dt_f + (p.dschrg_status ? ' (' + p.dschrg_status + ')' : ''));
@@ -480,6 +481,7 @@
         });
         card.appendChild(ub);
       }
+      if (r.recordsLinked) card.appendChild(h('div', { class: 'msg ok small' }, r.recordsLinked + ' Night OPD / LAMA record(s) made before admission are now on the patient card (matched by UHID).'));
       if (r.newDoctors.length) card.appendChild(h('div', { class: 'msg info small' }, 'New doctors learned: ' + r.newDoctors.join(', ') + '. Merge spellings in Settings > Doctors.'));
       if (r.newDepartments.length) card.appendChild(h('div', { class: 'msg info small' }, 'New departments: ' + r.newDepartments.join(', ') + ' — assign HOD in Settings > Departments.'));
       if (r.newOrgs.length) card.appendChild(h('div', { class: 'msg info small' }, 'New organisations: ' + r.newOrgs.join(', ') + '.'));

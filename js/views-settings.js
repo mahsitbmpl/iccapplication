@@ -255,7 +255,8 @@
     var names = [['room_categories', 'Room categories (Room Upgradation)'], ['requested_by', 'Requested By'], ['approving_authority', 'Approving Authority'],
       ['billing_head', 'Billing Head'], ['sdpe', 'SDPE'], ['celebration_types', 'Wow Moment: types of celebration'],
       ['homecare_services', 'Homecare lead: types of service'], ['campaign_types', 'Campaign lead: types of campaign'],
-      ['lead_receivers', 'Leads: given to whom'], ['lama_followups', 'LAMA: follow-up outcomes']];
+      ['lead_receivers', 'Leads: given to whom'], ['lama_followups', 'LAMA: follow-up outcomes'],
+      ['geo_tags', 'PCC: geography tagging'], ['next_of_kin', 'PCC: next of kin'], ['occupations', 'PCC: occupation']];
     var c = h('div', { class: 'card' }, h('h2', null, 'Names for pick-or-type fields'),
       h('p', { class: 'small muted' }, 'A new name typed in a form is added to its list automatically. Correct or remove names here (one per line).'));
     var grid = h('div', { class: 'formgrid' });
