@@ -233,22 +233,54 @@
     box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Rules'),
       h('label', { class: 'f' }, h('span', null, 'NPS at or above this is Positive (below is Negative)'), nps),
       h('label', { class: 'f' }, h('span', null, 'Re-admission = return within this many days'), rd), b1));
-    var rul = st.room_upgrade_lists || {};
-    var names = [['requested_by', 'Requested By'], ['approving_authority', 'Approving Authority'], ['billing_head', 'Billing Head'], ['sdpe', 'SDPE']];
-    var c = h('div', { class: 'card' }, h('h2', null, 'Room Upgradation name lists'),
-      h('p', { class: 'small muted' }, 'Names typed in the form are added here automatically (Phase 2). You can also add or correct them here.'));
+    // Phase 2 lists
+    box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Discharge call outcomes'),
+      h('p', { class: 'small muted' }, 'Reached = the patient or family answered. Try again = the call comes back next day (up to the number of tries below). NPS needed = the score must be entered.'),
+      listEditor([{ key: 'text', label: 'Outcome' }, { key: 'reached', label: 'Reached', type: 'check' }, { key: 'retry', label: 'Try again', type: 'check' },
+        { key: 'needs_nps', label: 'NPS needed', type: 'check' }], st.call_outcomes,
+        function (rows, btn) { save('call_outcomes', rows.filter(function (r) { return r.text; }), btn); })));
+    var poolDays = h('input', { type: 'number', min: 1, max: 60, value: st.call_pool_days });
+    var tries = h('input', { type: 'number', min: 1, max: 10, value: st.call_max_tries });
+    var pendDays = h('input', { type: 'number', min: 0, max: 30, value: st.dama_pending_days });
+    var b3 = h('button', { class: 'btn primary', onclick: function () {
+      save('call_pool_days', Number(poolDays.value), b3).then(function () { return save('call_max_tries', Number(tries.value)); })
+        .then(function () { return save('dama_pending_days', Number(pendDays.value)); });
+    } }, 'Save');
+    box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Calls and pending rules'),
+      h('label', { class: 'f' }, h('span', null, 'Patients discharged in the last this many days are in the call pool'), poolDays),
+      h('label', { class: 'f' }, h('span', null, 'Not reachable: tries before the call is closed'), tries),
+      h('label', { class: 'f' }, h('span', null, 'DAMA/DOR still in house after this many days goes to the Manager pending list'), pendDays), b3));
+
+    var picks = st.pick_lists || {};
+    var names = [['room_categories', 'Room categories (Room Upgradation)'], ['requested_by', 'Requested By'], ['approving_authority', 'Approving Authority'],
+      ['billing_head', 'Billing Head'], ['sdpe', 'SDPE'], ['celebration_types', 'Wow Moment: types of celebration'],
+      ['homecare_services', 'Homecare lead: types of service'], ['campaign_types', 'Campaign lead: types of campaign'],
+      ['lead_receivers', 'Leads: given to whom'], ['lama_followups', 'LAMA: follow-up outcomes']];
+    var c = h('div', { class: 'card' }, h('h2', null, 'Names for pick-or-type fields'),
+      h('p', { class: 'small muted' }, 'A new name typed in a form is added to its list automatically. Correct or remove names here (one per line).'));
+    var grid = h('div', { class: 'formgrid' });
     names.forEach(function (n) {
-      var ta = h('textarea', { rows: 3 }, (rul[n[0]] || []).join('\n'));
-      c.appendChild(h('label', { class: 'f' }, h('span', null, n[1] + ' (one per line)'), ta));
+      var ta = h('textarea', { rows: 4 }, (picks[n[0]] || []).join('\n'));
       ta.setAttribute('data-k', n[0]);
+      grid.appendChild(h('label', { class: 'f' }, h('span', null, n[1]), ta));
     });
+    c.appendChild(grid);
     var b2 = h('button', { class: 'btn primary', onclick: function () {
-      var v = {};
+      var v = JSON.parse(JSON.stringify(picks));
       c.querySelectorAll('textarea').forEach(function (ta) { v[ta.getAttribute('data-k')] = ta.value.split('\n').map(function (x) { return x.trim(); }).filter(String); });
-      save('room_upgrade_lists', v, b2);
+      // The Phase 1 Room Upgradation lists now live here; empty them so removed names stay removed.
+      save('pick_lists', v, b2).then(function () { return save('room_upgrade_lists', { requested_by: [], approving_authority: [], billing_head: [], sdpe: [] }); });
     } }, 'Save');
     c.appendChild(b2);
     box.appendChild(c);
+
+    var inv = h('textarea', { rows: 8 }, (st.inventory_items || []).join('\n'));
+    var b4 = h('button', { class: 'btn primary', onclick: function () {
+      save('inventory_items', inv.value.split('\n').map(function (x) { return x.trim(); }).filter(String), b4);
+    } }, 'Save');
+    box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Inventory items'),
+      h('p', { class: 'small muted' }, 'The rows of the monthly floor inventory, in order (one per line). Counts already saved for a removed item are kept.'),
+      h('label', { class: 'f' }, h('span', null, 'Items'), inv), b4));
   }
 
   /* ---------- Departments ---------- */

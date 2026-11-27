@@ -10,6 +10,9 @@
   var NAV = [
     { page: 'home', label: 'Home', ico: 'home' },
     { page: 'patients', label: 'Patients', ico: 'patients' },
+    { page: 'calls', label: 'Discharge calls', short: 'Calls', ico: 'phone', perm: 'discharge_calls' },
+    { page: 'general', label: 'General', ico: 'clipboard', perm: ['google_reviews', 'active_feedback', 'night_ipd_opd', 'dama_dor_lama', 'leads', 'inventory_training', 'raise_complaints'] },
+    { page: 'inventory', label: 'Inventory', ico: 'box', perm: 'inventory_training' },
     { page: 'upload', label: 'Upload', ico: 'upload', perm: 'upload' },
     { page: 'quality', label: 'Data quality', short: 'Quality', ico: 'quality' },
     { page: 'settings', label: 'Settings', ico: 'settings', perm: ['manage_lists', 'manage_departments'] },
@@ -233,10 +236,10 @@
           h('span', { class: 'who' }, h('b', null, p.user.display_name), h('span', null, entry.role)),
           h('button', { class: 'iconbtn', title: 'Log out', 'aria-label': 'Log out', onclick: App.logout }, I.icon('logout'))));
       var bottom = h('nav', { class: 'bottomnav', 'aria-label': 'Main' });
-      items.filter(function (n) { return ['home', 'patients', 'upload', 'quality', 'settings'].indexOf(n.page) >= 0; }).forEach(function (n) {
+      items.filter(function (n) { return ['home', 'patients', 'calls', 'general', 'upload'].indexOf(n.page) >= 0; }).forEach(function (n) {
         bottom.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, I.icon(n.ico, 20), h('span', null, n.short || n.label)));
       });
-      var more = items.filter(function (n) { return ['users', 'system', 'branches'].indexOf(n.page) >= 0; });
+      var more = items.filter(function (n) { return ['quality', 'settings', 'inventory', 'users', 'system', 'branches'].indexOf(n.page) >= 0; });
       if (more.length) bottom.appendChild(h('a', { href: '#/more', 'data-page': 'more' }, I.icon('more', 20), h('span', null, 'More')));
       var main = h('main', { class: 'main', id: 'main' });
       var top = h('header', { class: 'topbar' },

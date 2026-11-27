@@ -89,13 +89,15 @@
     right.appendChild(h('div', { class: 'card' }, h('h2', null, 'Admissions today by payment category'), bars));
     right.appendChild(h('p', { class: 'small' }, h('a', { href: '#/quality' }, 'Open the data-quality list'), '  ·  ',
       h('a', { href: '#', onclick: function (e) { e.preventDefault(); window.App.showChangePassword(false); } }, 'Change my password')));
+    var pend = Views._pendingCard();
+    if (pend) main.appendChild(pend);
     main.appendChild(h('div', { class: 'cols' }, left, right));
   };
 
   /* ================= PATIENTS ================= */
   var QUICK = [
     ['inhouse', 'In-house'], ['admitted', 'Admitted today'], ['transferred', 'Transferred today'],
-    ['discharged', 'Discharged today'], ['notin', 'Not in latest bed list'], ['repeat', 'Repeat admissions']
+    ['discharged', 'Discharged today'], ['night', 'Night admissions (8 PM–8 AM)'], ['notin', 'Not in latest bed list'], ['repeat', 'Repeat admissions']
   ];
 
   Views.patients = function (main, arg) {
@@ -126,6 +128,8 @@
         transferred: function (o) { return o.last_transfer_dt >= start; },
         discharged: function (o) { return o.status === 'DISCHARGED' && o.dis_dt >= start; },
         notin: function (o) { return o.status === 'IN' && o.in_latest === 'N'; },
+        // admitted between 8 PM yesterday and 8 AM today (IST): the Night IPD feedback list
+        night: function (o) { return o.admn_dt >= start - 4 * 3600000 && o.admn_dt < start + 8 * 3600000; },
         repeat: function (o) { return o.flags.indexOf('R') >= 0 && (!deptFilter || o.department === deptFilter); }
       }[quick] || function () { return false; };
       return all.filter(f).sort(function (a, b) { return String(a.bed).localeCompare(String(b.bed), undefined, { numeric: true }); });
@@ -226,6 +230,12 @@
           p.status === 'IN' && p.in_latest === 'N' ? h('span', { class: 'badge warn' }, 'Not in latest bed list since ' + p.not_in_list_since) : null,
           p.fromHistory ? h('span', { class: 'badge grey' }, 'History ' + p.fromHistory) : null))));
     box.appendChild(head);
+    var onChange = function (d) {
+      if (d && d.patient) S.patients[d.patient.admn_no] = d.patient;
+      rerender(p.admn_no);
+      if (d && d.patient) window.App.dataChanged();
+    };
+    box.appendChild(Views._sections(p, onChange));
 
     var locked = h('div', { class: 'card' }, h('h2', null, 'From HIS'), h('p', { class: 'small muted', style: 'margin:-6px 0 6px' }, 'These come from HIS and cannot be edited.'));
     var lg = h('div', { class: 'fieldgrid' });
@@ -257,16 +267,16 @@
     ed.appendChild(eg);
     box.appendChild(ed);
 
-    box.appendChild(h('div', { class: 'card' }, h('h2', null, 'ICC sections'),
-      h('p', { class: 'muted small' }, 'Active feedback, discharge call, night IPD/OPD, complaint, DAMA/DOR, room upgradation, wow, video, loyalty, leads and PCC cards arrive in Phase 2.')));
 
     var events = [];
     events.push({ ts: p.admn_dt, text: 'Admitted' + (p.fields.bed.his ? ' · bed ' + p.fields.bed.his : '') });
     if (p.dis_dt) events.push({ ts: p.dis_dt, text: 'Discharged' + (p.fields.discharge_type.value ? ' · ' + p.fields.discharge_type.value : '') });
-    (p.timeline || []).forEach(function (e) { events.push({ ts: e.ts, text: (e.kind === 't' ? 'Bed transfer ' : '') + e.text }); });
+    (p.timeline || []).forEach(function (e) {
+      events.push({ ts: e.ts, text: (e.kind === 't' ? 'Bed transfer ' : '') + e.text, extra: e.kind === 't' ? Views._upgradeFromHop(p, e.text, onChange) : null });
+    });
     events.sort(function (a, b2) { return b2.ts - a.ts; });
     var tl = h('ul', { class: 'timeline' });
-    events.forEach(function (e) { tl.appendChild(h('li', null, h('div', { class: 'small muted' }, I.fmtDT(e.ts)), e.text)); });
+    events.forEach(function (e) { tl.appendChild(h('li', null, h('div', { class: 'small muted' }, I.fmtDT(e.ts)), e.text, e.extra ? h('div', null, e.extra) : null)); });
     box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Timeline'), tl));
   }
 
@@ -370,7 +380,8 @@
     main.appendChild(h('div', { class: 'card' }, drop, fileInput, boxesWrap, h('div', { class: 'row', style: 'margin-top:12px' }, uploadAll, clearBtn)));
     main.appendChild(results);
     main.appendChild(undoBox);
-    main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Tablet feedback'), h('p', { class: 'small muted' }, 'The optional daily Tablet Feedback upload box arrives with the feedback module in Phase 2.')));
+    var tab = Views._tabletCard();
+    if (tab) main.appendChild(tab);
 
     function renderBoxes() {
       I.clear(boxesWrap);
@@ -540,6 +551,8 @@
       ul.appendChild(h('li', { onclick: function () { I.go('system'); } }, 'System: benchmark, audit log'));
     }
     if (S.profile.user.is_super) ul.appendChild(h('li', { onclick: function () { I.go('branches'); } }, 'Branches'));
+    if (I.can('manage_lists') || I.can('manage_departments')) ul.appendChild(h('li', { onclick: function () { I.go('settings'); } }, 'Settings'));
+    if (I.can('inventory_training')) ul.appendChild(h('li', { onclick: function () { I.go('inventory'); } }, 'Inventory'));
     ul.appendChild(h('li', { onclick: function () { I.go('quality'); } }, 'Data quality'));
     ul.appendChild(h('li', { onclick: function () { window.App.showChangePassword(false); } }, 'Change my password'));
     ul.appendChild(h('li', { onclick: function () { window.App.logout(); } }, 'Log out'));

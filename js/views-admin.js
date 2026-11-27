@@ -278,6 +278,14 @@
         .then(function () { return timed('Daily summary (census, admissions)', 3, api('homeSummary')); })
         .then(function () { return timed('Older records search (3 years History)', 3, api('searchHistory', { q: 'PATEL' })); })
         .then(function () {
+          return timed('Save an ICC record (active feedback)', 3, function () {
+            return I.Api.call('saveActivity', { kind: 'active_feedback', admn_no: admns[1 % admns.length],
+              data: { feedback: 'Benchmark test record', sentiment: 'Positive' } });
+          });
+        })
+        .then(function () { return timed('Discharge-call pool', 3, api('callPool')); })
+        .then(function () { return timed('Records list (today)', 3, api('listActivities', {})); })
+        .then(function () {
           status.textContent = 'Done.';
           var txt = 'MAHS ICC benchmark ' + I.fmtDT(Date.now()) + '\nDevice: ' + navigator.userAgent + '\nData: ' + JSON.stringify(sizes) + '\n' +
             results.map(function (r) { if (r.label.indexOf('Save breakdown') === 0) return r.label; return r.label + ' | runs ' + r.n + ' | median ' + r.med.toFixed(2) + 's | slowest ' + r.max.toFixed(2) + 's | server ' + (r.srv === null ? '-' : r.srv.toFixed(2) + 's') + (r.kb ? ' | ' + r.kb + ' KB' : ''); }).join('\n');

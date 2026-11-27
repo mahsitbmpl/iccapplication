@@ -130,6 +130,58 @@
     throw new Error('No "Ward Name / Room Name / Bed No" columns found.');
   }
 
-  var api = { parseHis: parseHis, parseBeds: parseBeds, toMs: toMs, detect: detect, extract: extract, readWorkbook: readWorkbook };
+  /**
+   * Tablet Feedback export ("Feedback_Patientwise", tab-separated text or Excel).
+   * Headings are matched by their English start (the Gujarati part is often garbled).
+   * Text dates (dd-mm-yyyy) are read as text so 05-10-2026 stays 5 October.
+   * The phone number column is not read.
+   */
+  var TABLET_INFO = { admn_no: 'ipdno', umr_no: 'uhidno', name: 'patientname', age_gender: 'agegender',
+    admn_dt: 'admissiondate', dis_dt: 'dischargedate', ts: 'dateofsuggestion', feedback: 'suggestionsfeedback', doctor: 'drname' };
+  var TABLET_INFO_ORDER = ['admn_no', 'umr_no', 'name', 'age_gender', 'admn_dt', 'dis_dt', 'ts', 'feedback', 'doctor'];
+  // Same order as TABLET_RATINGS in backend/Tablet.gs.
+  var TABLET_RATINGS = ['dietitianpatientfood', 'radiologylaboratory', 'coordinationofyourneeds', 'haveyoumadeunderstand',
+    'overallsatisfaction', 'howlikelyareyoutorecommend', 'securityattendant', 'icuot', 'cleanlinesslinen', 'pharmacyservices',
+    'admissionprocess', 'inhousedoctor', 'nursingcare', 'dischargetpa', 'dieticianpatientfood'];
+
+  function parseTablet(XLSX, data) {
+    var wb = XLSX.read(data, { type: 'array', sheetRows: MAX_ROWS, cellDates: false, dense: true, raw: true });
+    for (var s = 0; s < wb.SheetNames.length; s++) {
+      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[s]], { header: 1, raw: true, defval: '', blankrows: true });
+      for (var r = 0; r < Math.min(10, aoa.length); r++) {
+        var hk = (aoa[r] || []).map(key);
+        if (hk.indexOf('ipdno') < 0 || hk.indexOf('dateofsuggestion') < 0) continue;
+        var info = {}, missing = [];
+        TABLET_INFO_ORDER.forEach(function (f) { info[f] = hk.indexOf(TABLET_INFO[f]); if (info[f] < 0) missing.push(f); });
+        var rc = TABLET_RATINGS.map(function (pre) {
+          for (var i = 0; i < hk.length; i++) if (hk[i].indexOf(pre) === 0) return i;
+          return -1;
+        });
+        TABLET_RATINGS.forEach(function (pre, i) { if (rc[i] < 0) missing.push(pre); });
+        var rows = [], emptyRun = 0, month = '';
+        for (var t = 0; t < r; t++) {
+          var m = (aoa[t] || []).join(' ').match(/Month:\s*(\d{1,2})\s*Year:\s*(\d{4})/i);
+          if (m) month = m[2] + '-' + (m[1].length < 2 ? '0' : '') + m[1];
+        }
+        for (var i2 = r + 1; i2 < aoa.length; i2++) {
+          var row = aoa[i2] || [];
+          var ipd = row[info.admn_no];
+          if (blank(ipd)) { if (++emptyRun >= 3) break; continue; }
+          emptyRun = 0;
+          var out = TABLET_INFO_ORDER.map(function (f) {
+            var v = info[f] < 0 ? '' : row[info[f]];
+            if (f === 'admn_dt' || f === 'dis_dt' || f === 'ts') return toMs(v);
+            return blank(v) ? '' : String(v).trim();
+          });
+          out.push(rc.map(function (c) { var v = c < 0 ? 0 : Number(row[c]); return isFinite(v) ? v : 0; }));
+          rows.push(out);
+        }
+        return { rows: rows, meta: { rowCount: rows.length, month: month, missing: missing, sheetName: wb.SheetNames[s] } };
+      }
+    }
+    throw new Error('This is not a Tablet Feedback file (no "IPD No." and "Date of Suggestion" columns).');
+  }
+
+  var api = { parseHis: parseHis, parseBeds: parseBeds, parseTablet: parseTablet, toMs: toMs, detect: detect, extract: extract, readWorkbook: readWorkbook };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.HisParse = api;
 })(this);
