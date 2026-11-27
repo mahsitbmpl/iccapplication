@@ -174,12 +174,27 @@
         delete boot.index;
         var changed = !S.boot || S.boot.dataVersion !== boot.dataVersion;
         S.boot = boot; I.Store.set('boot.' + bid, boot);
+        App.checkVersions(boot.appVersion);
         var res = I.applyIndex(ix);
         if (res === 'need-full') return App.refreshIndex(true).then(function () { App.render(); });
         if (changed || res) App.render();
       }).catch(function (e) {
         if (e.code !== 'SESSION') I.toast(I.errText(e), true);
       }).then(function () { App.setRefreshing(false); });
+    },
+
+    /** The app (GitHub) and the server (Apps Script) must be the same version, or new screens fail. */
+    checkVersions: function (server) {
+      var app = window.ICC_CONFIG.APP_VERSION || '';
+      var old = document.getElementById('verwarn');
+      if (old) old.parentNode.removeChild(old);
+      var mm = function (v) { return v.split('-')[0].split('.').slice(0, 2).join('.'); };
+      if (!server || mm(server) === mm(app)) return;
+      var main = document.getElementById('main');
+      if (!main || !I.can('manage_users')) return;
+      main.parentNode.insertBefore(h('div', { id: 'verwarn', class: 'msg warn', style: 'margin:12px 16px 0' },
+        'The server (Apps Script) runs version ' + server.split('-')[0] + ' but the app is ' + app.split('-')[0] +
+        '. Paste all new .gs files, then Deploy → Manage deployments → pencil → Version: New version → Deploy.'), main);
     },
 
     refreshIndex: function (force) {

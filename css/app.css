@@ -373,3 +373,4 @@ table.invgrid input:focus { border-color: var(--sky); background: #fff; }
 .recact { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-2); }
 input[type=url], input[type=number] { width: 100%; border: 1px solid #ccd4e1; border-radius: var(--r-md); padding: 9px 12px; background: #fff; font: inherit; }
 @media (max-width: 640px) { .toolbar select { flex: 1 1 45%; } }
+img { -webkit-user-drag: none; user-select: none; }
