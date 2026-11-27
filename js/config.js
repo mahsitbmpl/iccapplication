@@ -4,5 +4,5 @@
  */
 window.ICC_CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbyueVloww6mDot8rOnLcyJ2Sjcc8hGZU1rptuOU-VA5upJWdKPw-Kko1GxvDPAb94Ts/exec',
-  APP_VERSION: '1.2.0-phase1'
+  APP_VERSION: '3.0.1-phase3'
 };
