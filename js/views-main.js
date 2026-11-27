@@ -555,9 +555,13 @@
     if (S.profile.user.is_super) ul.appendChild(h('li', { onclick: function () { I.go('branches'); } }, 'Branches'));
     if (I.can('manage_lists') || I.can('manage_departments')) ul.appendChild(h('li', { onclick: function () { I.go('settings'); } }, 'Settings'));
     if (I.can('inventory_training')) ul.appendChild(h('li', { onclick: function () { I.go('inventory'); } }, 'Inventory'));
+    if (I.can('view_dashboard')) ul.appendChild(h('li', { onclick: function () { I.go('dashboard'); } }, 'Dashboard'));
+    if (I.can('view_dashboard') || I.can('active_feedback') || I.can('manage_lists')) ul.appendChild(h('li', { onclick: function () { I.go('bedready'); } }, 'Bed Ready list'));
     if (I.can('raise_complaints') || I.can('close_complaints')) ul.appendChild(h('li', { onclick: function () { I.go('complaints'); } }, 'Complaints'));
+    if (I.can('download_excel')) ul.appendChild(h('li', { onclick: function () { I.go('exports'); } }, 'Excel'));
     ul.appendChild(h('li', { onclick: function () { I.go('quality'); } }, 'Data quality'));
     if (I.can('mail_settings')) ul.appendChild(h('li', { onclick: function () { I.go('mail'); } }, 'Email'));
+    if (I.can('manage_users')) ul.appendChild(h('li', { onclick: function () { I.go('health'); } }, 'Health'));
     ul.appendChild(h('li', { onclick: function () { window.App.showChangePassword(false); } }, 'Change my password'));
     ul.appendChild(h('li', { onclick: function () { window.App.logout(); } }, 'Log out'));
     main.appendChild(ul);

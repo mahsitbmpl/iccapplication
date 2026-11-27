@@ -219,6 +219,8 @@
       var name = h('input', { type: 'text', value: s.sender_name });
       var reply = h('input', { type: 'email', value: s.reply_to, placeholder: 'icc@…' });
       var copy = h('input', { type: 'text', value: s.icc_copy, placeholder: 'ICC team email(s), comma separated' });
+      var dto = h('input', { type: 'text', value: s.daily_to || '', placeholder: 'emails, comma separated' });
+      var wto = h('input', { type: 'text', value: s.weekly_to || '', placeholder: 'emails, comma separated' });
       var pd = h('select', null);
       [['name_ip_bed', 'Name, IP No and bed (no mobile)'], ['ip_bed', 'IP No and bed only'], ['name_ip_bed_mobile', 'Name, IP No, bed and mobile']].forEach(function (o) {
         pd.appendChild(h('option', { value: o[0], selected: o[0] === s.patient_details ? 'selected' : null }, o[1]));
@@ -230,7 +232,8 @@
       var save = h('button', { class: 'btn primary', onclick: function () {
         save.disabled = true;
         I.Api.call('saveMailSettings', { settings: { enabled: en.checked, sender_name: name.value, reply_to: reply.value, icc_copy: copy.value,
-          patient_details: pd.value, daily_limit: lim.value, digest_at: dig.value, reserve: res.value, app_url: url.value } })
+          patient_details: pd.value, daily_limit: lim.value, digest_at: dig.value, reserve: res.value, app_url: url.value,
+          daily_to: dto.value, weekly_to: wto.value } })
           .then(function () { I.toast('Saved'); load(); }).catch(function (e) { save.disabled = false; I.toast(I.errText(e), true); });
       } }, 'Save');
       box.appendChild(h('div', { class: 'card form' }, h('h2', null, 'Settings'),
@@ -243,7 +246,9 @@
           h('label', { class: 'f' }, h('span', null, 'Gmail recipients per day'), lim),
           h('label', { class: 'f' }, h('span', null, 'Combine complaint mails into an hourly digest from'), dig),
           h('label', { class: 'f' }, h('span', null, 'Keep for the daily report mails'), res),
-          h('label', { class: 'f wide' }, h('span', null, 'App address used in the HOD links'), url)),
+          h('label', { class: 'f wide' }, h('span', null, 'App address used in the HOD links'), url),
+          h('label', { class: 'f wide' }, h('span', null, 'Daily report mail at 6 PM to'), dto),
+          h('label', { class: 'f wide' }, h('span', null, 'Weekly report mail on Monday 9 AM to'), wto)),
         h('p', { class: 'small muted' }, 'Other mails (daily and weekly reports, Phase 4) carry figures only, never patient names or mobile numbers.'),
         save));
       var to = h('input', { type: 'email', placeholder: 'your email' });
@@ -265,7 +270,11 @@
       });
       box.appendChild(h('div', { class: 'card' }, h('div', { class: 'cardhead' }, h('h2', null, 'Mail log'),
         h('span', { class: 'badge grey' }, d.remaining === null ? 'quota unknown' : d.remaining + ' recipients left today')),
-        h('div', { class: 'toolbar' }, to, test, now),
+        h('div', { class: 'toolbar' }, to, test, now, h('button', { class: 'btn', onclick: function (e) {
+          var b = e.currentTarget; b.disabled = true;
+          I.Api.call('sendReportNow', { which: 'daily' }).then(function (r) { I.toast('Daily report: ' + r.result); load(); })
+            .catch(function (x) { b.disabled = false; I.toast(I.errText(x), true); });
+        } }, 'Send daily report now')),
         d.mails.length ? h('div', { class: 'tablewrap' }, h('table', { class: 't' }, h('thead', null, h('tr', null, h('th', null, 'Queued'), h('th', null, 'Kind'),
           h('th', null, 'To'), h('th', null, 'Subject'), h('th', null, 'Status'))), tb)) : h('p', { class: 'muted' }, 'No mails yet.'),
         h('p', { class: 'small muted' }, 'Mails are removed from the log after 30 days.')));

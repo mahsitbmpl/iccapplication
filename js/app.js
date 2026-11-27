@@ -10,6 +10,8 @@
   var NAV = [
     { page: 'home', label: 'Home', ico: 'home' },
     { page: 'patients', label: 'Patients', ico: 'patients' },
+    { page: 'dashboard', label: 'Dashboard', ico: 'chart', perm: 'view_dashboard' },
+    { page: 'bedready', label: 'Bed Ready', ico: 'bed', perm: ['view_dashboard', 'active_feedback', 'manage_lists'] },
     { page: 'calls', label: 'Discharge calls', short: 'Calls', ico: 'phone', perm: 'discharge_calls' },
     { page: 'general', label: 'General', ico: 'clipboard', perm: ['google_reviews', 'active_feedback', 'night_ipd_opd', 'dama_dor_lama', 'leads', 'inventory_training', 'raise_complaints'] },
     { page: 'inventory', label: 'Inventory', ico: 'box', perm: 'inventory_training' },
@@ -19,7 +21,9 @@
     { page: 'settings', label: 'Settings', ico: 'settings', perm: ['manage_lists', 'manage_departments'] },
     { page: 'users', label: 'Users', ico: 'users', perm: 'manage_users' },
     { page: 'system', label: 'System', ico: 'system', perm: 'manage_users' },
+    { page: 'exports', label: 'Excel', ico: 'file', perm: 'download_excel' },
     { page: 'mail', label: 'Email', ico: 'file', perm: 'mail_settings' },
+    { page: 'health', label: 'Health', ico: 'system', perm: 'manage_users' },
     { page: 'branches', label: 'Branches', ico: 'branches', superOnly: true }
   ];
 
@@ -257,7 +261,7 @@
       items.filter(function (n) { return ['home', 'patients', 'calls', 'general', 'upload'].indexOf(n.page) >= 0; }).forEach(function (n) {
         bottom.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, I.icon(n.ico, 20), h('span', null, n.short || n.label)));
       });
-      var more = items.filter(function (n) { return ['complaints', 'quality', 'settings', 'inventory', 'mail', 'users', 'system', 'branches'].indexOf(n.page) >= 0; });
+      var more = items.filter(function (n) { return ['dashboard', 'bedready', 'complaints', 'quality', 'settings', 'inventory', 'exports', 'mail', 'health', 'users', 'system', 'branches'].indexOf(n.page) >= 0; });
       if (more.length) bottom.appendChild(h('a', { href: '#/more', 'data-page': 'more' }, I.icon('more', 20), h('span', null, 'More')));
       var main = h('main', { class: 'main', id: 'main' });
       var top = h('header', { class: 'topbar' },

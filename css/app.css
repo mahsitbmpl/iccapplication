@@ -374,3 +374,42 @@ table.invgrid input:focus { border-color: var(--sky); background: #fff; }
 input[type=url], input[type=number] { width: 100%; border: 1px solid #ccd4e1; border-radius: var(--r-md); padding: 9px 12px; background: #fff; font: inherit; }
 @media (max-width: 640px) { .toolbar select { flex: 1 1 45%; } }
 img { -webkit-user-drag: none; user-select: none; }
+
+/* ---------- Phase 4: dashboard, Bed Ready, Excel, health ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: #fff; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; }
+.tile .tn { font-size: 26px; font-weight: 750; color: var(--navy); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .tl { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.tile .ts { font-size: 12px; color: var(--red); margin-top: 2px; }
+table.t { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.t th, table.t td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+table.t thead th { font-size: 12px; color: var(--muted); font-weight: 650; background: #fafbfd; }
+table.t tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+table.t td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.census td.cen { font-variant-numeric: tabular-nums; font-weight: 650; color: var(--navy); white-space: pre-line; min-width: 150px; }
+table.census td.act { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; min-width: 340px; }
+.deplist { list-style: none; margin: 0; padding: 0; }
+.deplist > li { border-bottom: 1px solid var(--line-2); }
+.deplist summary { display: grid; grid-template-columns: minmax(150px, 240px) 1fr 40px; gap: 12px; align-items: center; padding: 8px 4px; cursor: pointer; list-style: none; }
+.deplist summary::-webkit-details-marker { display: none; }
+.deplist summary b { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { display: inline-block; height: 8px; background: var(--navy-soft); border-radius: 4px; overflow: hidden; width: 100%; vertical-align: middle; }
+.bar i { display: block; height: 100%; background: var(--orange); border-radius: 4px; }
+details > summary .bar { width: 160px; margin-left: 10px; }
+.issues { list-style: none; margin: 0 0 8px; padding: 0 4px 0 18px; font-size: 13px; }
+.issues li { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: var(--ink-2); }
+.brgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.brcard { margin: 0; }
+.brcard.closed { opacity: .7; }
+.brsec { margin-top: 10px; }
+.bedchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.bchip { font-size: 12.5px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--ink-2); }
+.bchip.ready { border-color: #b7d7a8; background: #f1f8ec; color: #3b6d11; }
+.bchip.after { border-color: #ffd29e; background: #fff6eb; color: #a15c00; }
+.bchip.nr { border-color: #f3b8b3; background: #fdf0ef; color: #b42318; }
+.bchip.tick { cursor: pointer; min-height: 34px; }
+.explist { display: grid; gap: 10px; }
+.exprow { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin: 0; }
+.exprow h2 { margin: 0 0 2px; }
+.exprow p { margin: 0; }
+@media (max-width: 640px) { .exprow { flex-direction: column; align-items: stretch; } .deplist summary { grid-template-columns: 1fr 70px 32px; } }
