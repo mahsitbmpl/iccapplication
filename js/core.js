@@ -106,7 +106,9 @@
     call: function (action, body, opts) {
       opts = opts || {};
       var req = Object.assign({ action: action }, body || {});
-      if (State.token && !req.token) req.token = State.token;
+      if (State.token && !req.token && !opts.noAuth) req.token = State.token;
+      // The app's address, so links in mails (HOD page) point back here.
+      if (['saveActivity', 'sendToHod', 'complaintAction', 'testMail'].indexOf(action) >= 0) req.appUrl = location.href.split('#')[0];
       if (opts.branch !== false && State.branchId && !req.branchId) req.branchId = State.branchId;
       var url = window.ICC_CONFIG.API_URL;
       var t0 = performance.now();

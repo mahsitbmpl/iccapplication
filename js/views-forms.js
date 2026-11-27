@@ -46,7 +46,12 @@
     var out = [];
     if (rec.st) out.push(h('span', { class: 'badge ' + (rec.st === 'Positive' ? 'ok' : 'bad') }, rec.st));
     var s = rec.s;
-    if (rec.k === 'complaint' && s === 'open') out.push(h('span', { class: 'badge warn' }, 'Open'));
+    var cs = rec.k === 'complaint' ? s : (rec.data && rec.data.cmp ? rec.data.cs : '');
+    if (cs) {
+      var lab = cs === 'closed' ? 'Closed' : cs === 'action' ? 'Action given' : 'With HOD';
+      out.push(h('span', { class: 'badge ' + (cs === 'closed' ? 'ok' : cs === 'action' ? 'info' : 'warn') },
+        (rec.data && rec.data.cmp ? rec.data.cmp + ' · ' : '') + lab));
+    }
     if (rec.k === 'dama_dor') {
       if (s === 'open') out.push(h('span', { class: 'badge warn' }, 'Not discharged yet'));
       if (s === 'closed') out.push(h('span', { class: 'badge grey' }, 'Discharged' + (rec.dod ? ' ' + rec.dod : '')));
@@ -281,7 +286,7 @@
     var p = o.patient;
     var needFloor = !p && def.scope !== 'day';
     var form = buildForm({ def: def, values: Object.assign({}, o.prefill || {}, rec ? rec.data : {}), snap: p ? p.snap : (rec && rec.data.snap) || {},
-      needFloor: needFloor, floor: rec ? rec.floor : o.floor, manual: rec ? rec.data.manual : null, day: rec ? rec.d : '' });
+      needFloor: needFloor, floor: rec ? rec.floor : o.floor, manual: rec ? rec.data.manual : o.manual || null, day: rec ? rec.d : '' });
     var body = h('div', null);
     if (p) body.appendChild(h('div', { class: 'formpt' }, h('b', null, p.name), ' · bed ' + (p.fields.bed.value || '—') + ' · IP ' + p.admn_no));
     var err = h('div');
@@ -298,8 +303,16 @@
           floor: v.floor, data: v.data, manual: v.manual }).then(function (d) {
           if (d.picks) S.boot.settings.pick_lists = d.picks;
           if (d.patient) { S.patients[d.patient.admn_no] = d.patient; }
-          I.toast(rec ? 'Changes saved' : 'Saved');
+          I.toast(d.complaint ? Views._cmpSentText(d.complaint) : rec ? 'Changes saved' : 'Saved');
           if (o.onSaved) o.onSaved(d);
+          // Night OPD ending in LAMA: open a LAMA case with the same patient data.
+          if (!rec && def.kind === 'night_opd' && v.data.disposition === 'LAMA' && I.can('dama_dor_lama')) {
+            setTimeout(function () {
+              openForm({ kind: 'lama', manual: v.manual, onSaved: o.onSaved, prefill: { admission_date: v.data.visit_date, lama_date: v.data.visit_date,
+                admitting_dr: v.data.informed_dr, diagnosis: v.data.diagnosis, area: 'EMR' } });
+              I.toast('Night OPD saved. Now fill the LAMA case.');
+            }, 150);
+          }
           return true;
         }).catch(function (e) {
           Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
@@ -354,8 +367,14 @@
       Object.keys(rec.data.ratings || {}).forEach(function (k) { row(labels[k] || k, rec.data.ratings[k] || 'not rated'); });
     }
     if (rec.ub) row('Last changed by', rec.ub + ' · ' + I.fmtDT(rec.ua));
+    var cmp = rec.data && rec.data.cmp;
+    if (cmp) row('Complaint', cmp + ' · ' + ({ closed: 'Closed', action: 'Action given by HOD' }[rec.data.cs] || 'With HOD'));
     var acts = [{ label: 'Close' }];
-    var editable = def && rec.k !== 'discharge_call' && canChange(rec) && !(patient && patient.fromHistory);
+    if (cmp && (I.can('raise_complaints') || I.can('close_complaints'))) acts.unshift({ label: 'Complaints board', onClick: function () { I.go('complaints'); return true; } });
+    var canSend = !cmp && rec.st === 'Negative' && ['active_feedback', 'discharge_call', 'google_review', 'tablet'].indexOf(rec.k) >= 0 &&
+      I.can('raise_complaints') && !(patient && patient.fromHistory) && (rec.k !== 'tablet' || patient);
+    if (canSend) acts.push({ label: 'Send to HOD', primary: true, onClick: function () { Views._sendToHod(rec, patient, onChange); return true; } });
+    var editable = def && rec.k !== 'discharge_call' && rec.k !== 'complaint' && !cmp && canChange(rec) && !(patient && patient.fromHistory);
     if (editable) {
       acts.unshift({ label: 'Remove', danger: true, onClick: function () { removeRecord(rec, onChange); return true; } });
       acts.push({ label: 'Change', primary: true, onClick: function () { openForm({ kind: rec.k, rec: rec, patient: patient, onSaved: onChange }); return true; } });

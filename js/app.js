@@ -13,11 +13,13 @@
     { page: 'calls', label: 'Discharge calls', short: 'Calls', ico: 'phone', perm: 'discharge_calls' },
     { page: 'general', label: 'General', ico: 'clipboard', perm: ['google_reviews', 'active_feedback', 'night_ipd_opd', 'dama_dor_lama', 'leads', 'inventory_training', 'raise_complaints'] },
     { page: 'inventory', label: 'Inventory', ico: 'box', perm: 'inventory_training' },
+    { page: 'complaints', label: 'Complaints', ico: 'alert', perm: ['raise_complaints', 'close_complaints'] },
     { page: 'upload', label: 'Upload', ico: 'upload', perm: 'upload' },
     { page: 'quality', label: 'Data quality', short: 'Quality', ico: 'quality' },
     { page: 'settings', label: 'Settings', ico: 'settings', perm: ['manage_lists', 'manage_departments'] },
     { page: 'users', label: 'Users', ico: 'users', perm: 'manage_users' },
     { page: 'system', label: 'System', ico: 'system', perm: 'manage_users' },
+    { page: 'mail', label: 'Email', ico: 'file', perm: 'mail_settings' },
     { page: 'branches', label: 'Branches', ico: 'branches', superOnly: true }
   ];
 
@@ -26,6 +28,7 @@
       if (!window.ICC_CONFIG || /PASTE_YOUR/.test(window.ICC_CONFIG.API_URL)) return App.showConfigNeeded();
       if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
       window.addEventListener('hashchange', App.render);
+      if (App.hodLink()) return;
       if (!S.token || !S.profile) return App.showLogin();
       if (S.profile.user.must_change) return App.showChangePassword(true);
       App.startBranch();
@@ -239,7 +242,7 @@
       items.filter(function (n) { return ['home', 'patients', 'calls', 'general', 'upload'].indexOf(n.page) >= 0; }).forEach(function (n) {
         bottom.appendChild(h('a', { href: '#/' + n.page, 'data-page': n.page }, I.icon(n.ico, 20), h('span', null, n.short || n.label)));
       });
-      var more = items.filter(function (n) { return ['quality', 'settings', 'inventory', 'users', 'system', 'branches'].indexOf(n.page) >= 0; });
+      var more = items.filter(function (n) { return ['complaints', 'quality', 'settings', 'inventory', 'mail', 'users', 'system', 'branches'].indexOf(n.page) >= 0; });
       if (more.length) bottom.appendChild(h('a', { href: '#/more', 'data-page': 'more' }, I.icon('more', 20), h('span', null, 'More')));
       var main = h('main', { class: 'main', id: 'main' });
       var top = h('header', { class: 'topbar' },
@@ -253,7 +256,17 @@
       App.render();
     },
 
+    /** HOD private link from a complaint mail: its own page, no login. */
+    hodLink: function () {
+      var m = location.hash.match(/^#\/hod\/(.+)$/);
+      if (!m) return false;
+      document.body.classList.add('authbg');
+      window.HodPage.render(root, m[1].split('/'));
+      return true;
+    },
+
     render: function () {
+      if (App.hodLink()) return;
       var main = document.getElementById('main');
       if (!main) return;
       var r = I.route();

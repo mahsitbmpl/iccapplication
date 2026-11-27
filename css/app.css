@@ -358,3 +358,18 @@ table.invgrid input:focus { border-color: var(--sky); background: #fff; }
 .stars button { border: 0; background: none; font-size: 30px; line-height: 1; padding: 2px 3px; color: #cfd6e2; cursor: pointer; min-width: 40px; min-height: 40px; }
 .stars button.on { color: #F5A623; }
 .stars button:focus-visible { outline: 2px solid var(--sky); border-radius: 6px; }
+
+/* ---------- Phase 3: complaints, HOD page, email ---------- */
+.badge.info { background: #e6f0ff; color: #0033cc; }
+.cmplist li { padding: 12px 8px; }
+.cmplist .recmain b { color: var(--navy); font-variant-numeric: tabular-nums; }
+.cmpdetails { margin: 4px 0 3px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.toolbar input[type=search] { flex: 1 1 260px; }
+.toolbar select { width: auto; flex: 0 1 220px; }
+.auth.hod { max-width: 640px; }
+.hodcard h2 { margin: 0; }
+.hodcard dl.recdl { margin: 12px 0 18px; }
+.f.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.recact { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+input[type=url], input[type=number] { width: 100%; border: 1px solid #ccd4e1; border-radius: var(--r-md); padding: 9px 12px; background: #fff; font: inherit; }
+@media (max-width: 640px) { .toolbar select { flex: 1 1 45%; } }

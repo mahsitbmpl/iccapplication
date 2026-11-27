@@ -555,7 +555,9 @@
     if (S.profile.user.is_super) ul.appendChild(h('li', { onclick: function () { I.go('branches'); } }, 'Branches'));
     if (I.can('manage_lists') || I.can('manage_departments')) ul.appendChild(h('li', { onclick: function () { I.go('settings'); } }, 'Settings'));
     if (I.can('inventory_training')) ul.appendChild(h('li', { onclick: function () { I.go('inventory'); } }, 'Inventory'));
+    if (I.can('raise_complaints') || I.can('close_complaints')) ul.appendChild(h('li', { onclick: function () { I.go('complaints'); } }, 'Complaints'));
     ul.appendChild(h('li', { onclick: function () { I.go('quality'); } }, 'Data quality'));
+    if (I.can('mail_settings')) ul.appendChild(h('li', { onclick: function () { I.go('mail'); } }, 'Email'));
     ul.appendChild(h('li', { onclick: function () { window.App.showChangePassword(false); } }, 'Change my password'));
     ul.appendChild(h('li', { onclick: function () { window.App.logout(); } }, 'Log out'));
     main.appendChild(ul);
