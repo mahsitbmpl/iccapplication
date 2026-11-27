@@ -354,3 +354,7 @@ table.invgrid td.num.muted { color: var(--muted); font-weight: 400; }
 table.invgrid input { width: 100%; min-width: 62px; padding: 6px 7px; border: 1px solid transparent; border-radius: 6px; background: #f7f9fc; text-align: right; font-variant-numeric: tabular-nums; }
 table.invgrid td:nth-last-child(-n+2) input { text-align: left; min-width: 120px; }
 table.invgrid input:focus { border-color: var(--sky); background: #fff; }
+.stars { display: inline-flex; gap: 2px; }
+.stars button { border: 0; background: none; font-size: 30px; line-height: 1; padding: 2px 3px; color: #cfd6e2; cursor: pointer; min-width: 40px; min-height: 40px; }
+.stars button.on { color: #F5A623; }
+.stars button:focus-visible { outline: 2px solid var(--sky); border-radius: 6px; }

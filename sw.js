@@ -4,7 +4,7 @@
  * live from the server (and the cached patient list lives in localStorage, cleared at logout).
  * Bump CACHE when deploying a new version so devices pick up the new files.
  */
-var CACHE = 'mahs-icc-v2.0.1';
+var CACHE = 'mahs-icc-v2.0.2';
 var SHELL = ['./', 'index.html', 'css/app.css', 'js/config.js', 'js/his-parse.js', 'js/core.js', 'js/views-main.js', 'js/views-forms.js',
   'js/views-settings.js', 'js/views-admin.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'img/logo.png', 'img/mark.png'];
 var XLSX_URL = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';

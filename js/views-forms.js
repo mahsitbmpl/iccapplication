@@ -33,11 +33,14 @@
     def.fields.some(function (f) {
       var v = data[f.k];
       if (v === '' || v === undefined || v === null) return false;
-      if (['area', 'text', 'combo', 'sel', 'reason', 'dept', 'num', 'nps'].indexOf(f.t) >= 0) parts.push(f.t === 'nps' ? 'NPS ' + v : String(v));
+      if (f.t === 'stars') parts.push(starText(v));
+      else if (['area', 'text', 'combo', 'sel', 'reason', 'dept', 'num', 'nps'].indexOf(f.t) >= 0) parts.push(f.t === 'nps' ? 'NPS ' + v : String(v));
       return parts.length >= 2;
     });
     return parts.join(' · ');
   }
+
+  function starText(n) { n = Number(n) || 0; return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n) + ' ' + n + '/5'; }
 
   function stBadge(rec) {
     var out = [];
@@ -83,13 +86,31 @@
       var state = { value: cur || '' };
       options.forEach(function (o) {
         var b = h('button', { type: 'button', class: o === state.value ? 'on' : '', 'aria-pressed': o === state.value ? 'true' : 'false', onclick: function () {
-          state.value = state.value === o ? '' : o;
+          state.value = o;                                  // tapping the chosen one again keeps it
           Array.prototype.forEach.call(box.children, function (c) { c.className = c.textContent === state.value ? 'on' : ''; c.setAttribute('aria-pressed', c.textContent === state.value); });
           if (state.onchange) state.onchange(state.value);
         } }, o);
         box.appendChild(b);
       });
       box._state = state;
+      return box;
+    }
+    function starPicker(cur) {
+      var box = h('div', { class: 'stars', role: 'radiogroup', 'aria-label': 'Star rating' });
+      var state = { value: cur === '' || cur === undefined ? '' : String(cur) };
+      function paint() {
+        Array.prototype.forEach.call(box.children, function (b, i) {
+          var on = state.value !== '' && i < Number(state.value);
+          b.className = on ? 'on' : '';
+          b.setAttribute('aria-checked', String(state.value) === String(i + 1) ? 'true' : 'false');
+        });
+      }
+      [1, 2, 3, 4, 5].forEach(function (n) {
+        box.appendChild(h('button', { type: 'button', role: 'radio', 'aria-label': n + (n === 1 ? ' star' : ' stars'), title: n + ' of 5',
+          onclick: function () { state.value = String(n); paint(); if (state.onchange) state.onchange(state.value); } }, '★'));
+      });
+      box._state = state;
+      paint();
       return box;
     }
     function datalist(id, list) {
@@ -147,6 +168,7 @@
       else if (f.t === 'time') el = h('input', { type: 'time', value: cur });
       else if (f.t === 'yn') { el = seg(['YES', 'NO'], String(cur).toUpperCase()); field = h('div', { class: 'f' }); }
       else if (f.t === 'pn') { el = seg(['Positive', 'Negative'], cur, 'pn'); field = h('div', { class: 'f' }); }
+      else if (f.t === 'stars') { el = starPicker(cur); field = h('div', { class: 'f' }); }
       else if (f.t === 'nps') {
         el = seg(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], cur === '' ? '' : String(cur), 'nps');
         field = h('div', { class: 'f wide' });
@@ -192,6 +214,14 @@
         var hit = suggestDept(textIn.el.value);
         if (hit && deptIn.el.value !== hit) { deptIn.el.value = hit; fillIssues(); }
       });
+    }
+    // Stars suggest Positive/Negative: 4-5 Positive, 1-2 Negative, 3 left to the user.
+    if (inputs.stars && inputs.sentiment) {
+      inputs.stars.el._state.onchange = function (v) {
+        var want = Number(v) >= 4 ? 'Positive' : Number(v) <= 2 ? 'Negative' : '';
+        if (!want) return;
+        Array.prototype.forEach.call(inputs.sentiment.el.children, function (c) { if (c.textContent === want && inputs.sentiment.el._state.value !== want) c.click(); });
+      };
     }
     // NPS sets Positive/Negative (7 and above is positive by default)
     if (inputs.nps && inputs.sentiment) {
@@ -314,7 +344,7 @@
     row('By', rec.u);
     if (rec.floor) row('Floor', rec.floor);
     if (rec.data && rec.data.manual) { row('Patient', rec.data.manual.name); row('UHID', rec.data.manual.uhid); row('Age/ Sex', rec.data.manual.age_sex); row('Contact', rec.data.manual.contact); }
-    if (def) def.fields.forEach(function (f) { row(f.l, rec.data[f.k]); });
+    if (def) def.fields.forEach(function (f) { row(f.l, f.t === 'stars' && rec.data[f.k] !== '' ? starText(rec.data[f.k]) : rec.data[f.k]); });
     if (rec.k === 'tablet') {
       row('Score', rec.data.score);
       row('Feedback', rec.data.feedback);
