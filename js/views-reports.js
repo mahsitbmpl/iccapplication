@@ -40,13 +40,15 @@
     function load(recompute) {
       sessionStorage.setItem('icc.dashday', day.value);
       loading(box);
-      I.Api.call('dayReport', { day: day.value, recompute: !!recompute }).then(function (r) {
+      var show = function (r) {
         if (!re && r.canRecompute) {
           re = h('button', { class: 'btn small', onclick: function () { load(true); } }, 'Work out again');
           tools.appendChild(re);
         }
         draw(r);
-      }).catch(function (e) { fail(box, e); });
+      };
+      (recompute ? I.Api.call('dayReport', { day: day.value, recompute: true }).then(show) : I.swr('dayReport', { day: day.value }, show))
+        .catch(function (e) { fail(box, e); });
     }
     function draw(r) {
       I.clear(box);
@@ -100,7 +102,7 @@
     function load() {
       sessionStorage.setItem('icc.dashmonth', month.value);
       loading(box);
-      I.Api.call('monthReport', { month: month.value }).then(draw).catch(function (e) { fail(box, e); });
+      I.swr('monthReport', { month: month.value }, draw).catch(function (e) { fail(box, e); });
     }
     function draw(m) {
       I.clear(box);
@@ -137,10 +139,16 @@
 
   Views.bedready = function (main) {
     main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Bed Ready list'), h('div', { class: 'sub', id: 'brsub' }, 'Loading…'))));
+    var bar = h('div', { class: 'toolbar' });
     var box = h('div');
+    main.appendChild(bar);
     main.appendChild(box);
-    var edit = false, data = null, after = {}, notReady = {};
-    function load() { loading(box); I.Api.call('bedReady').then(function (d) { data = d; reset(); draw(); }).catch(function (e) { fail(box, e); }); }
+    var data = null, after = {}, notReady = {}, timer = null, saving = false, pendingSave = false;
+    var status = h('span', { class: 'small muted', 'aria-live': 'polite' });
+    function load() {
+      loading(box);
+      I.swr('bedReady', {}, function (d) { if (saving || timer) return; data = d; reset(); draw(); }).catch(function (e) { fail(box, e); });
+    }
     function reset() {
       after = {}; notReady = {};
       data.groups.forEach(function (g) { g.after.forEach(function (b) { after[b.bed] = true; }); g.notReady.forEach(function (b) { notReady[b.bed] = true; }); });
@@ -151,68 +159,80 @@
         lines.push('');
         lines.push('*' + g.name + '* (stay ' + pad(g.stay) + ')');
         if (g.closed) { lines.push('FLOOR CLOSED'); return; }
-        lines.push('Ready: ' + (g.ready.length ? g.ready.map(function (b) { return b.label; }).join(', ') : '0'));
-        lines.push('After discharge: ' + (g.after.length ? g.after.map(function (b) { return b.label; }).join(', ') : '0'));
+        var ready = g.ready.concat(g.notReady).filter(function (b) { return !notReady[b.bed]; });
+        var aft = g.occupied.filter(function (b) { return after[b.bed]; });
+        lines.push('Ready: ' + (ready.length ? ready.map(function (b) { return b.label; }).join(', ') : '0'));
+        lines.push('After discharge: ' + (aft.length ? aft.map(function (b) { return b.label; }).join(', ') : '0'));
       });
       return lines.join('\n');
     }
+    /** Every tap is saved by itself (1 second after the last tap). */
+    function queueSave() {
+      status.textContent = 'Saving…';
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        timer = null;
+        if (saving) { pendingSave = true; return; }
+        saving = true;
+        I.Api.call('saveBedTicks', { after: Object.keys(after).filter(function (k) { return after[k]; }), notReady: Object.keys(notReady).filter(function (k) { return notReady[k]; }) })
+          .then(function () { status.textContent = 'Saved'; })
+          .catch(function (e) { status.textContent = 'Not saved: ' + I.errText(e); I.toast('Ticks not saved: ' + I.errText(e), true); })
+          .then(function () { saving = false; if (pendingSave) { pendingSave = false; queueSave(); } });
+      }, 1000);
+    }
     function draw() {
-      I.clear(box);
+      I.clear(box); I.clear(bar);
       var sub = document.getElementById('brsub');
-      if (sub) sub.textContent = (data.atText ? 'Bed Occupancy upload of ' + data.atText : 'No Bed Occupancy upload yet') + ' · ' + pad(data.total) + ' staying';
-      var bar = h('div', { class: 'toolbar' });
-      if (!edit) {
-        bar.appendChild(h('button', { class: 'btn', onclick: function () {
-          var t = asText();
-          (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { I.toast('Copied. Paste it in your group.'); })
-            .catch(function () { I.modal('Bed Ready list', h('textarea', { rows: 14, readonly: true }, t), [{ label: 'Close' }]); });
-        } }, 'Copy as text'));
-        if (data.canTick) bar.appendChild(h('button', { class: 'btn primary', onclick: function () { edit = true; draw(); } }, 'Tick beds'));
-      } else {
-        bar.appendChild(h('span', { class: 'small muted' }, 'Tap an occupied bed for "after discharge" (today only). Tap a vacant bed to mark it not ready.'));
-        bar.appendChild(h('span', { class: 'spacer' }));
-        bar.appendChild(h('button', { class: 'btn', onclick: function () { edit = false; reset(); draw(); } }, 'Cancel'));
-        var save = h('button', { class: 'btn primary', onclick: function () {
-          save.disabled = true;
-          I.Api.call('saveBedTicks', { after: Object.keys(after).filter(function (k) { return after[k]; }), notReady: Object.keys(notReady).filter(function (k) { return notReady[k]; }) })
-            .then(function (d) { data = d; edit = false; reset(); draw(); I.toast('Saved'); })
-            .catch(function (e) { save.disabled = false; I.toast(I.errText(e), true); });
-        } }, 'Save ticks');
-        bar.appendChild(save);
-      }
-      box.appendChild(bar);
+      if (sub) sub.textContent = (data.atText ? 'Bed Occupancy upload of ' + data.atText : 'No Bed Occupancy upload yet: upload today\'s HIS files') + ' · ' + pad(data.total) + ' staying';
+      bar.appendChild(h('button', { class: 'btn', onclick: function () {
+        var t = asText();
+        (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { I.toast('Copied. Paste it in your group.'); })
+          .catch(function () { I.modal('Bed Ready list', h('textarea', { rows: 14, readonly: true }, t), [{ label: 'Close' }]); });
+      } }, 'Copy as text'));
+      if (data.canTick) bar.appendChild(h('span', { class: 'small muted' }, 'Tap a ready bed to mark it not ready (tap again to undo). Open "In house beds" to mark a discharge expected today.'));
+      bar.appendChild(h('span', { class: 'spacer' }));
+      bar.appendChild(status);
       var grid = h('div', { class: 'brgrid' });
       data.groups.forEach(function (g) {
         var card = h('div', { class: 'card brcard' + (g.closed ? ' closed' : '') }, h('div', { class: 'cardhead' }, h('h2', null, g.name),
           h('span', { class: 'count' }, pad(g.stay)), h('span', { class: 'small muted' }, 'staying')));
         if (g.closed) { card.appendChild(h('div', { class: 'msg' }, 'FLOOR CLOSED')); grid.appendChild(card); return; }
-        if (!edit) {
-          card.appendChild(sec('Ready', g.ready, 'ready'));
-          card.appendChild(sec('After discharge', g.after, 'after'));
-          if (g.notReady.length) card.appendChild(sec('Not ready', g.notReady, 'nr'));
-        } else {
-          card.appendChild(h('div', { class: 'small muted' }, 'Occupied'));
-          card.appendChild(chips(g.occupied, after, 'after'));
-          card.appendChild(h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Vacant'));
-          card.appendChild(chips(g.ready.concat(g.notReady).sort(function (a, b) { return a.bed.localeCompare(b.bed, 'en', { numeric: true }); }), notReady, 'nr'));
+        var vacant = g.ready.concat(g.notReady).sort(function (a, b) { return a.bed.localeCompare(b.bed, 'en', { numeric: true }); });
+        var readyBox = h('div'), afterBox = h('div'), nrBox = h('div');
+        function paint() {
+          var ready = vacant.filter(function (b) { return !notReady[b.bed]; });
+          var nr = vacant.filter(function (b) { return notReady[b.bed]; });
+          var aft = g.occupied.filter(function (b) { return after[b.bed]; });
+          I.clear(readyBox).appendChild(sec('Ready', ready, 'ready', data.canTick ? function (b) { notReady[b.bed] = true; paint(); queueSave(); } : null));
+          I.clear(afterBox).appendChild(sec('After discharge', aft, 'after', data.canTick ? function (b) { after[b.bed] = false; paint(); queueSave(); } : null));
+          I.clear(nrBox);
+          if (nr.length) nrBox.appendChild(sec('Not ready', nr, 'nr', data.canTick ? function (b) { notReady[b.bed] = false; paint(); queueSave(); } : null));
+          if (occ) Array.prototype.forEach.call(occ.querySelectorAll('.bchip'), function (c) {
+            var on = !!after[c.getAttribute('data-bed')];
+            c.className = 'bchip tick ' + (on ? 'after' : 'occ');
+            c.setAttribute('aria-pressed', on ? 'true' : 'false');
+          });
         }
+        var occ = null;
+        card.appendChild(readyBox); card.appendChild(afterBox); card.appendChild(nrBox);
+        if (data.canTick && g.occupied.length) {
+          occ = h('div', { class: 'bedchips' }, g.occupied.map(function (b) {
+            return h('button', { type: 'button', class: 'bchip tick occ', 'data-bed': b.bed, 'aria-pressed': 'false',
+              onclick: function () { after[b.bed] = !after[b.bed]; paint(); queueSave(); } }, b.label);
+          }));
+          card.appendChild(h('details', { class: 'brocc' }, h('summary', null, 'In house beds (' + g.occupied.length + '): tap for discharge expected today'), occ));
+        }
+        paint();
         grid.appendChild(card);
       });
       box.appendChild(grid);
     }
-    function sec(title, list, cls) {
+    function sec(title, list, cls, onTap) {
       return h('div', { class: 'brsec' }, h('div', { class: 'small muted' }, title + ' (' + list.length + ')'),
-        list.length ? h('div', { class: 'bedchips' }, list.map(function (b) { return h('span', { class: 'bchip ' + cls }, b.label); })) : h('div', { class: 'small' }, '0'));
-    }
-    function chips(list, state, cls) {
-      return h('div', { class: 'bedchips' }, list.map(function (b) {
-        var c = h('button', { type: 'button', class: 'bchip tick ' + (state[b.bed] ? cls : ''), 'aria-pressed': state[b.bed] ? 'true' : 'false', onclick: function () {
-          state[b.bed] = !state[b.bed];
-          c.className = 'bchip tick ' + (state[b.bed] ? cls : '');
-          c.setAttribute('aria-pressed', state[b.bed] ? 'true' : 'false');
-        } }, b.label);
-        return c;
-      }));
+        list.length ? h('div', { class: 'bedchips' }, list.map(function (b) {
+          return onTap ? h('button', { type: 'button', class: 'bchip tick ' + cls, title: cls === 'ready' ? 'Tap: not ready' : 'Tap to undo', onclick: function () { onTap(b); } }, b.label)
+            : h('span', { class: 'bchip ' + cls }, b.label);
+        })) : h('div', { class: 'small' }, '0'));
     }
     load();
   };
@@ -260,7 +280,7 @@
     main.appendChild(h('div', { class: 'pagehead' }, h('div', null, h('h1', null, 'Health'), h('div', { class: 'sub' }, 'Automatic jobs, backups, sheet sizes and mail.'))));
     var box = h('div');
     main.appendChild(box);
-    function load(withHistory) { loading(box); I.Api.call('health', { withHistory: !!withHistory }).then(draw).catch(function (e) { fail(box, e); }); }
+    function load(withHistory) { loading(box); I.swr('health', { withHistory: !!withHistory }, draw).catch(function (e) { fail(box, e); }); }
     function job(label, j) {
       if (!j) return [label, 'never', ''];
       var res = Array.isArray(j.result) ? j.result.join(' · ') : j.results ? j.results.join(' · ') : JSON.stringify(j.result);

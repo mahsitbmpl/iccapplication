@@ -179,12 +179,25 @@
         var changed = !S.boot || S.boot.dataVersion !== boot.dataVersion;
         S.boot = boot; I.Store.set('boot.' + bid, boot);
         App.checkVersions(boot.appVersion);
+        App.prefetchScreens();
         var res = I.applyIndex(ix);
         if (res === 'need-full') return App.refreshIndex(true).then(function () { App.render(); });
         if (changed || res) App.render();
       }).catch(function (e) {
         if (e.code !== 'SESSION') I.toast(I.errText(e), true);
       }).then(function () { App.setRefreshing(false); });
+    },
+
+    /** After start, quietly load the screens this user opens most, so they open at once. */
+    prefetchScreens: function () {
+      if (App._prefetched === S.branchId) return;
+      App._prefetched = S.branchId;
+      var list = [];
+      if (I.can('discharge_calls')) list.push(['callPool', {}]);
+      if (I.can('view_dashboard') || I.can('active_feedback') || I.can('manage_lists')) list.push(['bedReady', {}]);
+      if (I.can('raise_complaints') || I.can('close_complaints')) list.push(['complaintBoard', {}]);
+      if (I.can('view_dashboard')) list.push(['dayReport', { day: new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10) }]);
+      setTimeout(function () { I.prefetch(list); }, 2500);
     },
 
     /** The app (GitHub) and the server (Apps Script) must be the same version, or new screens fail. */

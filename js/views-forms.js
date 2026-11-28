@@ -46,6 +46,7 @@
     var out = [];
     if (rec.st) out.push(h('span', { class: 'badge ' + (rec.st === 'Positive' ? 'ok' : 'bad') }, rec.st));
     var s = rec.s;
+    if (s === 'saving') return [h('span', { class: 'badge saving' }, 'Saving…')];
     var cs = rec.k === 'complaint' ? s : (rec.data && rec.data.cmp ? rec.data.cs : '');
     if (cs) {
       var lab = cs === 'closed' ? 'Closed' : cs === 'action' ? 'Action given' : 'With HOD';
@@ -286,10 +287,11 @@
     var p = o.patient;
     var needFloor = !p && def.scope !== 'day';
     var form = buildForm({ def: def, values: Object.assign({}, o.prefill || {}, rec ? rec.data : {}), snap: p ? p.snap : (rec && rec.data.snap) || {},
-      needFloor: needFloor, floor: rec ? rec.floor : o.floor, manual: rec ? rec.data.manual : o.manual || null, day: rec ? rec.d : '' });
+      needFloor: needFloor, floor: o.floor || (rec ? rec.floor : ''), manual: o.manual || (rec ? rec.data.manual : null), day: o.day || (rec ? rec.d : '') });
     var body = h('div', null);
     if (p) body.appendChild(h('div', { class: 'formpt' }, h('b', null, p.name), ' · bed ' + (p.fields.bed.value || '—') + ' · IP ' + p.admn_no));
     var err = h('div');
+    if (o.error) err.appendChild(h('div', { class: 'msg err' }, 'Not saved: ' + o.error + ' Your entries are still here.'));
     body.appendChild(err);
     body.appendChild(form.el);
     var m = I.modal((rec ? 'Change ' : '') + def.label, body, [
@@ -297,9 +299,16 @@
       { label: rec ? 'Save changes' : 'Save', primary: true, onClick: function () {
         var v;
         try { v = form.read(); } catch (msg) { I.clear(err).appendChild(h('div', { class: 'msg err' }, String(msg))); return false; }
-        var btns = m.box.querySelectorAll('.actions .btn');
-        Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
-        return I.Api.call('saveActivity', { kind: def.kind, act_id: rec ? rec.id : '', admn_no: p ? p.admn_no : '', day: v.day,
+        // Saving runs in the background: the form closes at once and the record shows as "Saving…".
+        var card = p ? S.patients[p.admn_no] : null, pending = null;
+        if (card) {
+          pending = { id: 'saving-' + Date.now(), k: def.kind, d: v.day, ts: Date.now(), u: me().display_name || me().username, s: 'saving',
+            st: v.data.sentiment || '', dep: v.data.department || '', data: v.data, saving: true };
+          card.acts = (card.acts || []).filter(function (a) { return !rec || a.id !== rec.id; }).concat([pending]);
+          if (o.onSaved) o.onSaved(null);
+        }
+        I.toast('Saving ' + def.label + '…');
+        I.Api.call('saveActivity', { kind: def.kind, act_id: rec ? rec.id : '', admn_no: p ? p.admn_no : '', day: v.day,
           floor: v.floor, data: v.data, manual: v.manual }).then(function (d) {
           if (d.picks) S.boot.settings.pick_lists = d.picks;
           if (d.patient) { S.patients[d.patient.admn_no] = d.patient; }
@@ -313,12 +322,17 @@
               I.toast('Night OPD saved. Now fill the LAMA case.');
             }, 150);
           }
-          return true;
         }).catch(function (e) {
-          Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
-          I.clear(err).appendChild(h('div', { class: 'msg err' }, I.errText(e)));
-          return false;
+          if (card && pending) {
+            card.acts = card.acts.filter(function (a) { return a.id !== pending.id; });
+            if (rec) card.acts.push(rec);
+            if (o.onSaved) o.onSaved(null);
+          }
+          I.toast(def.label + ' not saved: ' + I.errText(e), true);
+          openForm(Object.assign({}, o, { prefill: v.data, manual: v.manual, floor: v.floor, day: v.day, error: I.errText(e),
+            rec: rec ? Object.assign({}, rec, { data: Object.assign({}, rec.data, v.data, { manual: v.manual || rec.data.manual }) }) : null }));
         });
+        return true;
       } }
     ]);
     m.box.classList.add('wide');
@@ -410,7 +424,7 @@
       if (!byKind[k]) return;
       var ul = h('ul', { class: 'reclist' });
       byKind[k].forEach(function (a) {
-        ul.appendChild(h('li', { onclick: function () { showRecord(a, onChange, p); }, tabindex: 0 },
+        ul.appendChild(h('li', { onclick: function () { if (!a.saving) showRecord(a, onChange, p); }, tabindex: 0, class: a.saving ? 'saving' : null },
           h('div', { class: 'recmain' }, h('span', { class: 'rectext' }, summary(k, a.data || {}) || label(k)), stBadge(a)),
           h('div', { class: 'small muted' }, fmtDay(a.d) + ' · ' + a.u + (a.dep ? ' · ' + a.dep : ''))));
       });
@@ -451,12 +465,13 @@
         var v;
         try { v = form.read(); } catch (msg) { I.clear(err).appendChild(h('div', { class: 'msg err' }, String(msg))); return false; }
         v.data.alt = altUsed.v;
-        return I.Api.call('callAction', { admn_no: admn, op: 'result', data: v.data }).then(function (d) {
+        I.toast('Saving the call…');
+        I.Api.call('callAction', { admn_no: admn, op: 'result', data: v.data }).then(function (d) {
           if (d.patient) S.patients[admn] = d.patient;
           I.toast(d.call.status === 'open' ? 'Saved. Will come back tomorrow (try ' + d.call.attempts + ').' : 'Call saved');
           if (onDone) onDone(d);
-          return true;
-        }).catch(function (e) { I.clear(err).appendChild(h('div', { class: 'msg err' }, I.errText(e))); return false; });
+        }).catch(function (e) { I.toast('Call not saved: ' + I.errText(e) + '. Open the call again.', true); });
+        return true;
       } }
     ]);
     m.box.classList.add('wide');
@@ -488,7 +503,7 @@
     main.appendChild(box);
     var filter = sessionStorage.getItem('icc.callf') || 'mine';
     function load() {
-      return I.Api.call('callPool').then(function (d) { if (I.route().page === 'calls') draw(d); })
+      return I.swr('callPool', {}, function (d) { if (I.route().page === 'calls') draw(d); })
         .catch(function (e) { I.clear(box).appendChild(h('div', { class: 'msg err' }, I.errText(e))); });
     }
     function draw(d) {
@@ -592,7 +607,7 @@
     from.addEventListener('change', load); to.addEventListener('change', load);
     function load() {
       I.clear(listBox).appendChild(h('div', { class: 'muted' }, h('span', { class: 'spin' }), ' Loading…'));
-      I.Api.call('listActivities', { from: from.value, to: to.value, kinds: [kind] }).then(function (d) {
+      I.swr('listActivities', { from: from.value, to: to.value, kinds: [kind] }, function (d) {
         I.clear(listBox);
         var recs = d.records;
         if (!recs.length) { listBox.appendChild(h('p', { class: 'muted' }, 'No ' + def.label + ' records for these dates.')); return; }
@@ -627,7 +642,8 @@
     main.appendChild(h('div', { class: 'card' }, h('div', { class: 'toolbar' },
       h('label', { class: 'f inline' }, h('span', null, 'Month'), month), h('label', { class: 'f inline' }, h('span', null, 'Floor'), floor),
       h('span', { class: 'spacer' }), info, saveBtn), box));
-    var rows = [];
+    var rows = [], dirty = false;
+    box.addEventListener('input', function () { dirty = true; });
     var COLS = [['opening', 'OPENING'], ['patient_use', 'PATIENT USE'], ['laundry', 'LAUNDRY'], ['floor_stock', 'FLOOR STOCKS'],
       ['condemn', 'CONDEMN'], ['sewing', 'SEWING']];
     function calc(r) {
@@ -638,8 +654,10 @@
     function load() {
       sessionStorage.setItem('icc.invfloor', floor.value);
       saveBtn.disabled = true;
+      dirty = false;
       I.clear(box).appendChild(h('div', { class: 'muted' }, h('span', { class: 'spin' }), ' Loading…'));
-      I.Api.call('getInventory', { month: month.value, floor: floor.value }).then(function (d) {
+      I.swr('getInventory', { month: month.value, floor: floor.value }, function (d) {
+        if (dirty) return;                                  // do not overwrite counts being typed
         rows = d.rows;
         info.textContent = d.saved ? 'Saved ' + d.updatedAt + ' by ' + d.updatedBy : 'Not saved yet' + (rows.some(function (r) { return r.opening !== ''; }) ? ' · opening taken from last month' : '');
         draw();
@@ -674,6 +692,7 @@
     saveBtn.addEventListener('click', function () {
       saveBtn.disabled = true;
       I.Api.call('saveInventory', { month: month.value, floor: floor.value, rows: rows }).then(function (d) {
+        dirty = false;
         info.textContent = 'Saved ' + d.updatedAt + ' by ' + d.updatedBy;
         I.toast('Inventory saved');
         saveBtn.disabled = false;

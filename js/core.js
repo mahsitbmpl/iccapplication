@@ -255,7 +255,38 @@
   }
   function go(path) { location.hash = '#/' + path; }
 
+  /**
+   * Stale-while-revalidate: show the last answer for this screen at once, then ask the server and
+   * redraw only if something changed. Screens open instantly after the first visit.
+   * Kept in memory, and on the device (cleared at logout) when small.
+   */
+  var SWR_MEM = {};
+  function swrKey(action, params) { return 'swr.' + State.branchId + '.' + action + '.' + JSON.stringify(params || {}); }
+  function swr(action, params, onData) {
+    var key = swrKey(action, params);
+    var cached = SWR_MEM[key] || Store.get(key, null);
+    if (cached) { try { onData(cached.d, true); } catch (e) { console.error(e); } }
+    return Api.call(action, params || {}).then(function (d) {
+      var s = JSON.stringify(d);
+      var fresh = { d: d, s: s };
+      SWR_MEM[key] = fresh;
+      if (s.length < 150000) Store.set(key, fresh); else Store.del(key);
+      if (!cached || cached.s !== s) onData(d, false);
+      return d;
+    }).catch(function (e) {
+      if (cached) { toast('Showing the last saved view: ' + errText(e), true); return cached.d; }
+      throw e;
+    });
+  }
+  /** Fetch quietly so the screen is ready when opened. */
+  function prefetch(list) {
+    return list.reduce(function (p, x) {
+      return p.then(function () { return swr(x[0], x[1], function () {}).catch(function () {}); });
+    }, Promise.resolve());
+  }
+
   window.ICC = {
+    swr: swr, prefetch: prefetch,
     h: h, icon: icon, clear: clear, $: $, fmtD: fmtD, fmtDT: fmtDT, dayStart: dayStart, Store: Store, State: State, Api: Api,
     ApiError: ApiError, toast: toast, errText: errText, modal: modal, confirmBox: confirmBox, can: can,
     searchIndex: searchIndex, indexObjects: indexObjects, applyIndex: applyIndex, route: route, go: go

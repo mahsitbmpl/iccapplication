@@ -413,3 +413,8 @@ details > summary .bar { width: 160px; margin-left: 10px; }
 .exprow h2 { margin: 0 0 2px; }
 .exprow p { margin: 0; }
 @media (max-width: 640px) { .exprow { flex-direction: column; align-items: stretch; } .deplist summary { grid-template-columns: 1fr 70px 32px; } }
+.bchip.occ { background: #f7f9fc; color: var(--ink-2); }
+.brocc { margin-top: 10px; }
+.brocc summary { cursor: pointer; font-size: 12.5px; color: var(--sky-ink); font-weight: 600; }
+.brocc[open] summary { margin-bottom: 6px; }
+.badge.saving { background: #eef1f8; color: var(--navy); }

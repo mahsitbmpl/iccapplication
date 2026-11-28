@@ -76,7 +76,7 @@
     main.appendChild(h('div', { class: 'card' }, h('div', { class: 'toolbar' }, q, deptF, floorF), tabs, box));
     var data = null;
     function load() {
-      I.Api.call('complaintBoard').then(function (d) { data = d; draw(); })
+      I.swr('complaintBoard', {}, function (d) { data = d; draw(); })
         .catch(function (e) { I.clear(box).appendChild(h('div', { class: 'msg err' }, I.errText(e))); });
     }
     function draw() {
@@ -210,7 +210,7 @@
     main.appendChild(box);
     function load() {
       I.clear(box).appendChild(h('div', { class: 'muted' }, h('span', { class: 'spin' }), ' Loading…'));
-      I.Api.call('mailLog').then(draw).catch(function (e) { I.clear(box).appendChild(h('div', { class: 'msg err' }, I.errText(e))); });
+      I.swr('mailLog', {}, draw).catch(function (e) { I.clear(box).appendChild(h('div', { class: 'msg err' }, I.errText(e))); });
     }
     function draw(d) {
       I.clear(box);
