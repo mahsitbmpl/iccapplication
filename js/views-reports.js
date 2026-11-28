@@ -314,6 +314,9 @@
       });
       sizes.appendChild(h('button', { class: 'linkbtn', onclick: function () { load(true); } }, 'Include History spreadsheets'));
       box.appendChild(sizes);
+      if (x.errors && x.errors.length) box.appendChild(h('div', { class: 'card' }, h('h2', null, 'Server errors'),
+        h('p', { class: 'small muted' }, 'Unexpected errors of the last hours. Users see only the reference. Full details: Apps Script → Executions.'),
+        table(['Reference', 'Time', 'Action', 'Error'], x.errors.map(function (e) { return [e.ref, e.at, e.action, e.msg]; }))));
       box.appendChild(h('p', { class: 'small muted' }, 'Server version ' + x.version + ' · checked ' + x.now + ' · ' + x.counts.patientsFast + ' patients in the fast table'));
     }
     load(false);

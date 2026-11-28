@@ -131,6 +131,7 @@
     sessionEnded: function () {
       if (!S.token) return;
       S.token = ''; S.profile = null; S.boot = null; S.index = null; S.patients = {};
+      I.swrClear();
       I.Store.clearAll();
       App.showLogin('Your session has ended. Please log in again.');
     },
@@ -144,6 +145,7 @@
       var token = S.token;
       I.Api.call('logout', { token: token }, { branch: false }).catch(function () {});
       S.token = ''; S.profile = null; S.boot = null; S.index = null; S.patients = {};
+      I.swrClear();
       I.Store.clearAll();                 // patient data never stays on a shared device
       App.showLogin();
     },

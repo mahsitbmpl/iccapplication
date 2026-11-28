@@ -9,6 +9,21 @@
  */
 (function () {
   'use strict';
+  // Not inside another site's frame (stops click-jacking; GitHub Pages cannot send that header).
+  if (window.top !== window.self) {
+    document.documentElement.style.display = 'none';
+    try { window.top.location = window.self.location.href; } catch (e) { /* blocked: stay hidden */ }
+    return;
+  }
+  // Excel library: if the CDN cannot be reached, use the copy in js/vendor/ (if it was uploaded).
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.id === 'xlsx-cdn' && !window.XLSX) {
+      var s = document.createElement('script');
+      s.src = 'js/vendor/xlsx.full.min.js';
+      document.head.appendChild(s);
+    }
+  }, true);
   function editable(el) {
     return el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
   }

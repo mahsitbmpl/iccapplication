@@ -114,9 +114,15 @@
       var url = window.ICC_CONFIG.API_URL;
       var t0 = performance.now();
       // text/plain body = "simple request": no CORS preflight against Apps Script.
-      return fetch(url, { method: 'POST', body: JSON.stringify(req), redirect: 'follow' })
-        .catch(function () { throw new ApiError('NETWORK', 'No connection to the server. Check the internet and try again.'); })
-        .then(function (res) { return res.text(); })
+      // A request that hangs (weak mobile signal) ends after 3 minutes instead of waiting for ever.
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, opts.timeoutMs || 180000) : null;
+      return fetch(url, { method: 'POST', body: JSON.stringify(req), redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
+        .catch(function (e) {
+          if (e && e.name === 'AbortError') throw new ApiError('NETWORK', 'No answer from the server for 3 minutes. Check whether it was saved before trying again.');
+          throw new ApiError('NETWORK', 'No connection to the server. Check the internet and try again.');
+        })
+        .then(function (res) { clearTimeout(timer); return res.text(); })
         .then(function (text) {
           var ms = Math.round(performance.now() - t0);
           var json;
@@ -261,7 +267,11 @@
    * Kept in memory, and on the device (cleared at logout) when small.
    */
   var SWR_MEM = {};
-  function swrKey(action, params) { return 'swr.' + State.branchId + '.' + action + '.' + JSON.stringify(params || {}); }
+  function swrKey(action, params) {
+    var uid = State.profile && State.profile.user ? State.profile.user.user_id : '';
+    return 'swr.' + uid + '.' + State.branchId + '.' + action + '.' + JSON.stringify(params || {});
+  }
+  function swrClear() { SWR_MEM = {}; }
   function swr(action, params, onData) {
     var key = swrKey(action, params);
     var cached = SWR_MEM[key] || Store.get(key, null);
@@ -286,7 +296,7 @@
   }
 
   window.ICC = {
-    swr: swr, prefetch: prefetch,
+    swr: swr, prefetch: prefetch, swrClear: swrClear,
     h: h, icon: icon, clear: clear, $: $, fmtD: fmtD, fmtDT: fmtDT, dayStart: dayStart, Store: Store, State: State, Api: Api,
     ApiError: ApiError, toast: toast, errText: errText, modal: modal, confirmBox: confirmBox, can: can,
     searchIndex: searchIndex, indexObjects: indexObjects, applyIndex: applyIndex, route: route, go: go
